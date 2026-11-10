@@ -1,6 +1,7 @@
 module RegistrationTests
 
 import Registration
+import Data.Text
 import System
 
 covering

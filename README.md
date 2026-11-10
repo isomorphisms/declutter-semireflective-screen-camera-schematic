@@ -90,3 +90,17 @@ and [`evidence/host/acceptance.tsv`](evidence/host/acceptance.tsv).
 The real-photograph result has its separate
 [`evidence/photo-run.tsv`](evidence/photo-run.tsv) record.
 Passing raster checks do not establish successful optical reconstruction.
+
+## Later, still-draft registration work
+
+The [registration continuation](docs/registration-v2.md) provides fixed-point
+Idriç source selection across three landmark-supported overlapping pairs,
+explicit seam choices, measured leave-one-out errors, and pixel-mapped
+reference trials. This is **not seamless stitching of the entire diagram**:
+the 1712–1713, 1713–1718 and 1715–1716 control joins remain unregistered.
+The 1721–1722 power pair lacks independent feature corroboration.
+
+`Registration.idric` and `RegistrationTests.idric` are new source and are
+**not yet compiled or run through the pinned Idriç compiler**. Raster cleanup
+and previous axis-aligned assembly have separate, older execution evidence.
+Neither status constitutes verified electrical continuity.

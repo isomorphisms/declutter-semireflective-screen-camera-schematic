@@ -237,7 +237,10 @@ render_plan plan first second destination = do
          for_indices_result (cast plan.frame.columns) 0 $ \column ⇒ do
            sample ← select_sample plan first second (PointAt column row)
            case sample of
-             Nothing ⇒ pure (Right ()) -- white means unobserved, not a wire
+             Nothing ⇒ do
+               admitted ← put_pixel output column row (RGB 232 232 232)
+               if admitted then pure (Right ())
+                           else pure (Left "internal gutter coordinate was rejected")
              Just pixel ⇒ do
                admitted ← put_pixel output column row pixel
                if admitted then pure (Right ())
@@ -259,7 +262,7 @@ provenance plan =
   "\nseam_anchor_row\t" ++ show plan.seam_row ++
   "\nresampling\tnearest source pixel; no bilinear interpolation" ++
   "\noverlap_policy\tone observed source per pixel, first above seam, second below" ++
-  "\nunobserved_pixels\twhite" ++
+  "\nunobserved_pixels\tgrey RGB(232,232,232)" ++
   "\nelectrical_continuity\tnot inferred or verified\n"
 
 covering

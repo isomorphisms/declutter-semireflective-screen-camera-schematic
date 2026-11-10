@@ -81,3 +81,20 @@ service schematic.
 All raw photos and the photographer's reflection stay **out of the public
 repository**. Output digests and deterministic plan parameters may be kept
 here without exposing those private images.
+
+## Independent, image-feature cross-check
+
+A separate read-only SIFT analysis using contrast-limited feature detection
+found 16 candidate matches within 12 pixels of the **control 1716 → 1717**
+landmark solution (median 1.66 pixels) and 12 for **power 1720 → 1723**
+(median 3.50 pixels). These are inspection-only diagnostics: the matching
+method and its possible false matches are not part of the Idriç renderer.
+No such feature corroboration was obtained for **1721 → 1722** (only two
+SIFT ratio-test matches, neither near the fitted transform), so its visual
+join remains **PROVISIONAL** despite four manually recorded features.
+
+New fixed-point reference trials use **grey** for pixels covered by neither
+photo and select exactly one RGB source sample per covered pixel. They use
+the published integer coefficients rather than a floating-point warp. The
+test outputs remain **reference execution only**, not executed Idriç output.
+Their SHA-256 digests are in `evidence/registered-trials.sha256.tsv`.
