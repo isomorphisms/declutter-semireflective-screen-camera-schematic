@@ -1,0 +1,7 @@
+# All coefficients are in millionths, earlier to later.
+canvas 1017 1442
+earlier 1000001720.ppm 25 260 1000 990
+later 1000001723.ppm 25 300 1000 1000
+similarity 916800 46900 60278600 -364557200
+origin 16 -134
+seam 680

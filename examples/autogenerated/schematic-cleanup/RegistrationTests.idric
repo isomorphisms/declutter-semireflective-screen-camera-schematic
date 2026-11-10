@@ -1,0 +1,36 @@
+module RegistrationTests
+
+import Registration
+import System
+
+covering
+check : Text → Bool → IO ()
+check message True = putStrLn ("PASS: " ++ message)
+check message False = do
+  putStrLn ("FAIL: " ++ message)
+  exitFailure
+
+close_point : PixelPoint → PixelPoint → Bool
+close_point first second =
+  abs (first.column - second.column) <= 1 &&
+  abs (first.row - second.row) <= 1
+
+covering
+main : IO ()
+main = do
+  let identity = ScaleAndTurn 1000000 0 0 0
+  let shifted = ScaleAndTurn 1053400 8200 56506600 (-674696800)
+  let reduced = ScaleAndTurn 916800 46900 60278600 (-364557200)
+  let enlarged = ScaleAndTurn 1296600 (-62900) (-261154100) (-866254200)
+  let source = PointAt 558 1030
+  check "identity admitted" (valid_similarity identity)
+  check "zero determinant refused" (not (valid_similarity (ScaleAndTurn 0 0 0 0)))
+  check "negative rounded ratio" (rounded_ratio (-15) 10 ≟ (-2))
+  check "identity inverse" (close_point (inverse_point identity source) source)
+  check "control pair nearest-inverse roundtrip"
+    (close_point (inverse_point shifted (forward_point shifted source)) source)
+  check "first power pair nearest-inverse roundtrip"
+    (close_point (inverse_point reduced (forward_point reduced source)) source)
+  check "second power pair nearest-inverse roundtrip"
+    (close_point (inverse_point enlarged (forward_point enlarged source)) source)
+  putStrLn "PASS: registration arithmetic acceptance"
