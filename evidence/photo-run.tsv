@@ -1,0 +1,30 @@
+field	value
+compiler_revision	2bce7677f513d711875e978bd6f5ad28b9e54d58
+backend	Chez Scheme on Linux x86_64
+input_count	12
+input_manifest	source-manifest.tsv
+input_dimensions_each	1152x1536
+enhancement_command	cleanup enhance INPUT.ppm OUTPUT.ppm 24 8 3
+radius_pixels	24
+gain	8
+noise_subtraction	3
+photographs_processed	1712,1713,1714,1715,1716,1717,1718,1719,1720,1721,1722,1723
+all_photo_commands	PASS; every command exit 0 and output 1152x1536
+control_layout	layouts/control.tsv
+control_dimensions	2328x3720
+control_distinct_sections	6
+control_bottom_left_source	1718; wider alternate of 1714 preserves clipped left-side captions
+power_layout	layouts/power.tsv
+power_dimensions	2328x2230
+power_distinct_sections	4
+original_reference_layouts	generated separately from unenhanced decoded sources
+spatial_resampling	NONE; rectangular copies retain original pixel sampling
+selected_setting_review	24/8/3 after trials32/5/0 and24/12/0 on1712
+reflection_suppression	PARTIAL; broad reflected forms are weaker, edges remain
+fine_detail	LOSSY; noise subtraction can suppress faint real marks
+screen_frame_and_navigation	PARTIAL; generous crops retain circuit edge content and some screen clutter
+geometric_stitching	NOT_ACCEPTED; separate viewports remain divided by grey gutters
+circuit_connectivity	NOT_PROVEN
+output_type	readability-enhanced section atlas, not reconstructed electrical schematic
+png_pnm_pixel_equality	PASS; ImageMagick compare absolute error count0 for both sheets
+output_channel_depth	8-bit RGB

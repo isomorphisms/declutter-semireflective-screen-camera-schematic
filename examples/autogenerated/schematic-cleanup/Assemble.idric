@@ -1,0 +1,131 @@
+module Main
+
+import Data.List
+import Data.Text
+import System
+import System.File
+import SchematicRaster
+
+-- Layouts place source rectangles at their original sampling density.
+-- They deliberately preserve a gutter where circuit registration is unknown.
+record Section where
+  constructor PlaceSection
+  source_name : Text
+  source_left : Int
+  source_top : Int
+  columns : Int
+  rows : Int
+  destination_left : Int
+  destination_top : Int
+
+record Layout where
+  constructor ArrangeSections
+  columns : Int
+  rows : Int
+  sections : List Section
+
+parse_coordinate : Text → Maybe Int
+parse_coordinate value = case parseInteger {a = Integer} value of
+  Just number ⇒ if number >= 0 && number <= 32768
+                   then Just (cast number) else Nothing
+  Nothing ⇒ Nothing
+
+parse_section : Text → Either Text Section
+parse_section line = case words line of
+  [source, left, top, width, height, destination_left, destination_top] ⇒ do
+    left_value ← maybe (Left "invalid source left coordinate") Right (parse_coordinate left)
+    top_value ← maybe (Left "invalid source top coordinate") Right (parse_coordinate top)
+    width_value ← maybe (Left "invalid section width") Right (parse_coordinate width)
+    height_value ← maybe (Left "invalid section height") Right (parse_coordinate height)
+    destination_x ← maybe (Left "invalid destination left coordinate") Right (parse_coordinate destination_left)
+    destination_y ← maybe (Left "invalid destination top coordinate") Right (parse_coordinate destination_top)
+    if width_value > 0 && height_value > 0 && not (elem '/' (unpack source)) &&
+       not (elem '\\' (unpack source)) && source /= "." && source /= ".."
+       then Right (PlaceSection source left_value top_value width_value height_value
+                               destination_x destination_y)
+       else Left "section dimensions must be positive and source must be a basename"
+  _ ⇒ Left "section requires source, left, top, width, height, destination left, destination top"
+
+readable_line : Text → Bool
+readable_line line = case unpack (trim line) of
+  [] ⇒ False
+  '#' :: _ ⇒ False
+  _ ⇒ True
+
+parse_layout : Text → Either Text Layout
+parse_layout text = case filter readable_line (lines text) of
+  [] ⇒ Left "layout is empty"
+  canvas :: section_lines ⇒ case words canvas of
+    ["canvas", width, height] ⇒ do
+      width_value ← maybe (Left "invalid canvas width") Right (parse_coordinate width)
+      height_value ← maybe (Left "invalid canvas height") Right (parse_coordinate height)
+      sections ← traverse parse_section section_lines
+      if null sections then Left "layout has no sections"
+                       else Right (ArrangeSections width_value height_value sections)
+    _ ⇒ Left "layout must begin with canvas, width, height"
+
+overlap : Section → Section → Bool
+overlap first second =
+  first.destination_left < second.destination_left + second.columns &&
+  second.destination_left < first.destination_left + first.columns &&
+  first.destination_top < second.destination_top + second.rows &&
+  second.destination_top < first.destination_top + first.rows
+
+disjoint_sections : List Section → Bool
+disjoint_sections [] = True
+disjoint_sections (section :: rest) =
+  not (any (overlap section) rest) && disjoint_sections rest
+
+place_sections : Text → Image → List Section → IO (Either Text ())
+place_sections directory canvas [] = pure (Right ())
+place_sections directory canvas (section :: rest) = do
+  Right source ← read_ppm (directory ++ "/" ++ section.source_name)
+    | Left message ⇒ pure (Left (section.source_name ++ ": " ++ message))
+  Right () ← copy_rectangle source canvas section.source_left section.source_top
+                             section.columns section.rows
+                             section.destination_left section.destination_top
+    | Left message ⇒ pure (Left (section.source_name ++ ": " ++ message))
+  place_sections directory canvas rest
+
+-- The grey canvas is layout background, not recovered schematic paper.
+-- The layout file identifies exactly which output pixels have a source.
+fill_gutters : Image → IO (Either Text ())
+fill_gutters canvas =
+  for_indices_result (cast (image_height canvas)) 0 $ \row ⇒
+    for_indices_result (cast (image_width canvas)) 0 $ \column ⇒ do
+      accepted ← put_pixel canvas column row (RGB 232 232 232)
+      if accepted then pure (Right ())
+                  else pure (Left "internal gutter coordinate was outside the canvas")
+
+covering
+assemble : Text → Text → Text → IO (Either Text ())
+assemble layout_path input_directory output_path = do
+  Right text ← readFile layout_path
+    | Left error ⇒ pure (Left ("cannot read layout: " ++ show error))
+  Right layout ← pure (parse_layout text)
+    | Left message ⇒ pure (Left message)
+  if not (disjoint_sections layout.sections)
+     then pure (Left "overlapping destination rectangles would silently overwrite source evidence")
+     else do
+       Right canvas ← new_image layout.columns layout.rows
+         | Left message ⇒ pure (Left message)
+       Right () ← fill_gutters canvas
+         | Left message ⇒ pure (Left message)
+       Right () ← place_sections input_directory canvas layout.sections
+         | Left message ⇒ pure (Left message)
+       write_ppm output_path canvas
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, layout_path, input_directory, output_path] ⇒ do
+      Right () ← assemble layout_path input_directory output_path
+        | Left message ⇒ do
+            putStrLn ("FAIL: " ++ message)
+            exitFailure
+      putStrLn ("PASS: wrote source-mapped section layout to " ++ output_path)
+    _ ⇒ do
+      putStrLn "Usage: assemble LAYOUT INPUT_DIRECTORY OUTPUT.pnm"
+      exitFailure

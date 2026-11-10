@@ -1,0 +1,7 @@
+# Native sampling; grey gutters preserve uncertain viewport joins.
+canvas	2328	2230
+# source	left	top	width	height	destination_left	destination_top
+1000001720.ppm	0	310	1152	1100	0	0
+1000001723.ppm	0	365	1152	980	0	1124
+1000001721.ppm	0	365	1152	940	1176	0
+1000001722.ppm	0	270	1152	1120	1176	988

@@ -1,0 +1,447 @@
+module SchematicRaster
+
+import Data.Buffer
+import Data.List
+import Data.So
+import Data.Text
+import System.File
+import System.File.Buffer
+
+-- These aliases isolate the inherited byte representation at the raster boundary.
+public export
+Channel : Type
+Channel = Bits8
+
+public export
+record Pixel where
+  constructor RGB
+  red : Channel
+  green : Channel
+  blue : Channel
+
+export
+white : Pixel
+white = RGB 255 255 255
+
+export
+black : Pixel
+black = RGB 0 0 0
+
+valid_position : Number → Number → Int → Int → Bool
+valid_position width height x y =
+  x >= 0 && y >= 0 && x < cast width && y < cast height
+
+record Position (width : Number) (height : Number) where
+  constructor AtPixel
+  column : Int
+  row : Int
+  0 inside : So (valid_position width height column row)
+
+payload_fits : Number → Number → Int → Int → Bool
+payload_fits width height beginning extent =
+  beginning >= 0 && beginning + cast width × cast height × 3 <= extent
+
+record Raster (width : Number) (height : Number) where
+  constructor StoredPixels
+  storage : Buffer
+  beginning : Int
+  extent : Int
+  0 fits : So (payload_fits width height beginning extent)
+
+export
+record Image where
+  constructor Photograph
+  columns : Number
+  rows : Number
+  pixels : Raster columns rows
+
+export
+image_width : Image → Int
+image_width image = cast image.columns
+
+export
+image_height : Image → Int
+image_height image = cast image.rows
+
+-- Limits protect host allocations and keep every byte-address calculation
+-- inside a signed 64-bit host Int. They are resource limits, not image semantics.
+maximum_side : Int
+maximum_side = 32768
+
+maximum_pixels : Int
+maximum_pixels = 40000000
+
+valid_dimensions : Int → Int → Bool
+valid_dimensions width height =
+  width > 0 && height > 0 && width <= maximum_side &&
+  height <= maximum_side && width × height <= maximum_pixels
+
+admit_pixels : (width : Number) → (height : Number) →
+               Buffer → (beginning : Int) → (extent : Int) →
+               Maybe (Raster width height)
+admit_pixels width height bytes beginning extent =
+  case choose (payload_fits width height beginning extent) of
+    Left payload_evidence ⇒ Just (StoredPixels bytes beginning extent payload_evidence)
+    Right _ ⇒ Nothing
+
+position_in : (width : Number) → (height : Number) →
+              (x : Int) → (y : Int) → Maybe (Position width height)
+position_in width height x y =
+  case choose (valid_position width height x y) of
+    Left position_evidence ⇒ Just (AtPixel x y position_evidence)
+    Right _ ⇒ Nothing
+
+pixel_offset : {width : Number} → Raster width height → Position width height → Int
+pixel_offset raster position =
+  raster.beginning + (position.row × cast width + position.column) × 3
+
+read_at : {width : Number} → Raster width height → Position width height → IO Pixel
+read_at raster position = do
+  let offset = pixel_offset raster position
+  red ← getBits8 raster.storage offset
+  green ← getBits8 raster.storage (offset + 1)
+  blue ← getBits8 raster.storage (offset + 2)
+  pure (RGB red green blue)
+
+write_at : {width : Number} → Raster width height → Position width height → Pixel → IO ()
+write_at raster position pixel = do
+  let offset = pixel_offset raster position
+  setBits8 raster.storage offset pixel.red
+  setBits8 raster.storage (offset + 1) pixel.green
+  setBits8 raster.storage (offset + 2) pixel.blue
+
+export
+pixel_at : Image → Int → Int → IO (Maybe Pixel)
+pixel_at image x y = case position_in image.columns image.rows x y of
+  Nothing ⇒ pure Nothing
+  Just position ⇒ Just <$> read_at image.pixels position
+
+export
+put_pixel : Image → Int → Int → Pixel → IO Bool
+put_pixel image x y pixel = case position_in image.columns image.rows x y of
+  Nothing ⇒ pure False
+  Just position ⇒ do
+    write_at image.pixels position pixel
+    pure True
+
+export
+for_indices : Number → Int → (Int → IO ()) → IO ()
+for_indices Z _ action = pure ()
+for_indices (S remaining) index action = do
+  action index
+  for_indices remaining (index + 1) action
+
+export
+for_indices_result : Number → Int → (Int → IO (Either Text ())) → IO (Either Text ())
+for_indices_result Z _ action = pure (Right ())
+for_indices_result (S remaining) index action = do
+  Right () ← action index
+    | Left message ⇒ pure (Left message)
+  for_indices_result remaining (index + 1) action
+
+export
+new_image : Int → Int → IO (Either Text Image)
+new_image width height =
+  if not (valid_dimensions width height)
+     then pure (Left "invalid image dimensions or image resource limit exceeded")
+     else do
+       let size = width × height × 3
+       Just bytes ← newBuffer size
+         | Nothing ⇒ pure (Left "unable to allocate image buffer")
+       actual_size ← rawSize bytes
+       if actual_size /= size
+          then pure (Left "allocated buffer length differs from requested image size")
+          else do
+            for_indices (cast size) 0 (\offset ⇒ setBits8 bytes offset 255)
+            case admit_pixels (cast width) (cast height) bytes 0 actual_size of
+              Nothing ⇒ pure (Left "new image failed payload bounds admission")
+              Just raster ⇒ pure (Right (Photograph (cast width) (cast height) raster))
+
+is_space : Int → Bool
+is_space value = elem value [9, 10, 11, 12, 13, 32]
+
+-- Header parsing is bounded by 4096 bytes. Binary payload is never decoded as text.
+header_budget : Number
+header_budget = 4096
+
+skip_comment : Number → Buffer → Int → Int → IO (Either Text Int)
+skip_comment Z _ _ _ = pure (Left "PNM header comment exceeds the header limit")
+skip_comment (S fuel) bytes size index =
+  if index >= 4096 then pure (Left "PNM header exceeds the header limit") else
+  if index >= size then pure (Left "PNM ends inside a header comment") else do
+    value ← getByte bytes index
+    if value ≟ 10 then pure (Right (index + 1))
+                  else skip_comment fuel bytes size (index + 1)
+
+skip_header_space : Number → Buffer → Int → Int → IO (Either Text Int)
+skip_header_space Z _ _ _ = pure (Left "PNM header exceeds the header limit")
+skip_header_space (S fuel) bytes size index =
+  if index >= 4096 then pure (Left "PNM header exceeds the header limit") else
+  if index >= size then pure (Left "PNM header is incomplete") else do
+    value ← getByte bytes index
+    if is_space value
+      then skip_header_space fuel bytes size (index + 1)
+      else if value ≟ 35
+        then do
+          Right after_comment ← skip_comment fuel bytes size (index + 1)
+            | Left message ⇒ pure (Left message)
+          skip_header_space fuel bytes size after_comment
+        else pure (Right index)
+
+read_token : Number → Buffer → Int → Int → List Char → IO (Either Text (Text, Int))
+read_token Z _ _ _ _ = pure (Left "PNM header token is too long")
+read_token (S fuel) bytes size index reversed =
+  if index >= 4096 then pure (Left "PNM header exceeds the header limit") else
+  if index >= size then pure (Left "PNM header ends before its delimiter") else do
+    value ← getByte bytes index
+    if is_space value
+       then pure (Right (pack (reverse reversed), index))
+       else if value < 33 || value > 126
+         then pure (Left "PNM header contains a non-ASCII token")
+         else read_token fuel bytes size (index + 1) (chr value :: reversed)
+
+next_token : Buffer → Int → Int → IO (Either Text (Text, Int))
+next_token bytes size index = do
+  Right start ← skip_header_space header_budget bytes size index
+    | Left message ⇒ pure (Left message)
+  read_token 32 bytes size start []
+
+parse_count : Text → Maybe Int
+parse_count text =
+  if text ≟ "" || not (all isDigit (unpack text))
+     then Nothing
+     else case parseInteger text of
+       Nothing ⇒ Nothing
+       Just value ⇒ if value > 0 && value <= cast maximum_side
+                       then Just (cast value) else Nothing
+
+strict_file_bytes : Text → IO (Either Text Buffer)
+strict_file_bytes path = do
+  Right handle ← openFile path Read
+    | Left error ⇒ pure (Left ("cannot open input: " ++ show error))
+  Right size ← fileSize handle
+    | Left error ⇒ do
+        closeFile handle
+        pure (Left ("cannot read input length: " ++ show error))
+  if size <= 0 || size > maximum_pixels × 3 + 4096
+     then do
+       closeFile handle
+       pure (Left "input length exceeds the supported PNM limit")
+     else do
+       Just bytes ← newBuffer size
+         | Nothing ⇒ do
+             closeFile handle
+             pure (Left "unable to allocate input buffer")
+       read_result ← readBufferData handle bytes 0 size
+       closeFile handle
+       case read_result of
+         Left error ⇒ pure (Left ("cannot read input: " ++ show error))
+         Right count ⇒ if count ≟ size then pure (Right bytes)
+                       else pure (Left "input read ended before the declared file length")
+
+export
+read_ppm : Text → IO (Either Text Image)
+read_ppm path = do
+  Right bytes ← strict_file_bytes path
+    | Left message ⇒ pure (Left message)
+  size ← rawSize bytes
+  Right (magic, after_magic) ← next_token bytes size 0
+    | Left message ⇒ pure (Left message)
+  if magic /= "P6" then pure (Left "only binary RGB P6 PNM is accepted") else do
+    Right (width_text, after_width) ← next_token bytes size after_magic
+      | Left message ⇒ pure (Left message)
+    Right (height_text, after_height) ← next_token bytes size after_width
+      | Left message ⇒ pure (Left message)
+    Right (maximum_text, after_maximum) ← next_token bytes size after_height
+      | Left message ⇒ pure (Left message)
+    Just width ← pure (parse_count width_text)
+      | Nothing ⇒ pure (Left "PNM width is invalid")
+    Just height ← pure (parse_count height_text)
+      | Nothing ⇒ pure (Left "PNM height is invalid")
+    if maximum_text /= "255" || not (valid_dimensions width height)
+       then pure (Left "PNM requires maximum sample 255 and admitted dimensions")
+       else do
+         -- The P6 delimiter is exactly one whitespace byte. In particular,
+         -- a whitespace-valued first pixel remains payload, never skipped.
+         let beginning = after_maximum + 1
+         let expected_size = beginning + width × height × 3
+         if size /= expected_size
+            then pure (Left "PNM payload length does not match width × height × 3")
+            else case admit_pixels (cast width) (cast height) bytes beginning size of
+              Nothing ⇒ pure (Left "PNM payload failed bounds admission")
+              Just raster ⇒ pure (Right (Photograph (cast width) (cast height) raster))
+
+export
+write_ppm : Text → Image → IO (Either Text ())
+write_ppm path image = do
+  let header = "P6\n" ++ show (image_width image) ++ " " ++
+               show (image_height image) ++ "\n255\n"
+  let header_size = stringByteLength header
+  let payload_size = image_width image × image_height image × 3
+  let total_size = header_size + payload_size
+  Just output ← newBuffer total_size
+    | Nothing ⇒ pure (Left "unable to allocate output buffer")
+  actual_size ← rawSize output
+  if actual_size /= total_size
+     then pure (Left "output allocation has an unexpected length")
+     else do
+       setString output 0 header
+       copyData image.pixels.storage image.pixels.beginning payload_size output header_size
+       result ← writeBufferToFile path output total_size
+       case result of
+         Left (error, count) ⇒ pure (Left ("cannot write output after " ++ show count ++
+                                           " bytes: " ++ show error))
+         Right () ⇒ pure (Right ())
+
+export
+copy_rectangle : Image → Image → Int → Int → Int → Int → Int → Int → IO (Either Text ())
+copy_rectangle source target source_x source_y width height target_x target_y =
+  if source_x < 0 || source_y < 0 || target_x < 0 || target_y < 0 ||
+     not (valid_dimensions width height) ||
+     width > image_width source || height > image_height source ||
+     width > image_width target || height > image_height target ||
+     source_x > image_width source - width || source_y > image_height source - height ||
+     target_x > image_width target - width || target_y > image_height target - height
+     then pure (Left "copy rectangle lies outside its source or target")
+     else do
+       -- Staging the whole rectangle makes overlapping copies well-defined,
+       -- including when source and target happen to share the same buffer.
+       let row_bytes = width × 3
+       let staged_size = row_bytes × height
+       Just staged ← newBuffer staged_size
+         | Nothing ⇒ pure (Left "unable to allocate rectangle staging buffer")
+       actual_size ← rawSize staged
+       if actual_size /= staged_size
+          then pure (Left "rectangle allocation has an unexpected length")
+          else do
+            for_indices (cast height) 0 $ \row ⇒ do
+              let source_offset = source.pixels.beginning +
+                    ((source_y + row) × image_width source + source_x) × 3
+              copyData source.pixels.storage source_offset row_bytes staged (row × row_bytes)
+            for_indices (cast height) 0 $ \row ⇒ do
+              let target_offset = target.pixels.beginning +
+                    ((target_y + row) × image_width target + target_x) × 3
+              copyData staged (row × row_bytes) row_bytes target.pixels.storage target_offset
+            pure (Right ())
+
+export
+crop_image : Image → Int → Int → Int → Int → IO (Either Text Image)
+crop_image source left top width height = do
+  Right result ← new_image width height
+    | Left message ⇒ pure (Left message)
+  Right () ← copy_rectangle source result left top width height 0 0
+    | Left message ⇒ pure (Left message)
+  pure (Right result)
+
+public export
+record Parameters where
+  constructor LocalContrast
+  radius : Int
+  gain : Int
+  noise : Int
+
+export
+valid_parameters : Parameters → Bool
+valid_parameters contrast =
+  contrast.radius >= 1 && contrast.radius <= 256 &&
+  contrast.gain >= 1 && contrast.gain <= 16 &&
+  contrast.noise >= 0 && contrast.noise <= 32
+
+export
+normalize_sample : Parameters → Int → Int → Int
+normalize_sample contrast background sample =
+  max 0 (255 - contrast.gain × max 0 (background - sample - contrast.noise))
+
+-- Three 64-bit integral sums per grid point. A zero top row and left column
+-- make every local rectangle an explicit four-corner difference.
+record Background where
+  constructor IntegralChannels
+  sums : Buffer
+  pitch : Int
+  sum_width : Int
+  sum_height : Int
+
+sum_offset : Background → Int → Int → Int → Int
+sum_offset background x y channel = (y × background.pitch + x) × 24 + channel × 8
+
+read_sum : Background → Int → Int → Int → IO Int
+read_sum background x y channel = do
+  value ← getInt64 background.sums (sum_offset background x y channel)
+  pure (cast value)
+
+write_sum : Background → Int → Int → Int → Int → IO ()
+write_sum background x y channel value =
+  setInt64 background.sums (sum_offset background x y channel) (cast value)
+
+make_background : Image → IO (Either Text Background)
+make_background image = do
+  let width = image_width image
+  let height = image_height image
+  let pitch = width + 1
+  let extent = pitch × (height + 1) × 24
+  Just sums ← newBuffer extent
+    | Nothing ⇒ pure (Left "unable to allocate local-background integral image")
+  actual_size ← rawSize sums
+  if actual_size /= extent
+     then pure (Left "integral image allocation has an unexpected length")
+     else do
+       let background = IntegralChannels sums pitch width height
+       for_indices (cast pitch) 0 $ \x ⇒
+         for_indices 3 0 $ \channel ⇒ write_sum background x 0 channel 0
+       Right () ← for_indices_result (cast height) 1 $ \y ⇒ do
+         for_indices 3 0 $ \channel ⇒ write_sum background 0 y channel 0
+         for_indices_result (cast width) 1 $ \x ⇒ do
+           Just pixel ← pixel_at image (x - 1) (y - 1)
+             | Nothing ⇒ pure (Left "internal source-coordinate admission failed while forming local background")
+           for_indices 3 0 $ \channel ⇒ do
+             above ← read_sum background x (y - 1) channel
+             left ← read_sum background (x - 1) y channel
+             diagonal ← read_sum background (x - 1) (y - 1) channel
+             let sample = case channel of
+                            0 ⇒ cast pixel.red
+                            1 ⇒ cast pixel.green
+                            _ ⇒ cast pixel.blue
+             write_sum background x y channel (sample + above + left - diagonal)
+           pure (Right ())
+         | Left message ⇒ pure (Left message)
+       pure (Right background)
+
+local_mean : Background → Parameters → Int → Int → Int → IO Int
+local_mean background contrast x y channel = do
+  let left = max 0 (x - contrast.radius)
+  let top = max 0 (y - contrast.radius)
+  let right = min background.sum_width (x + contrast.radius + 1)
+  let bottom = min background.sum_height (y + contrast.radius + 1)
+  lower_right ← read_sum background right bottom channel
+  lower_left ← read_sum background left bottom channel
+  upper_right ← read_sum background right top channel
+  upper_left ← read_sum background left top channel
+  let area = (right - left) × (bottom - top)
+  pure ((lower_right - lower_left - upper_right + upper_left) `div` area)
+
+export
+enhance : Image → Parameters → IO (Either Text Image)
+enhance source contrast =
+  if not (valid_parameters contrast)
+     then pure (Left "invalid local-contrast radius, gain, or noise subtraction")
+     else do
+       Right background ← make_background source
+         | Left message ⇒ pure (Left message)
+       Right result ← new_image (image_width source) (image_height source)
+         | Left message ⇒ pure (Left message)
+       Right () ← for_indices_result source.rows 0 $ \y ⇒
+         for_indices_result source.columns 0 $ \x ⇒ do
+           Just pixel ← pixel_at source x y
+             | Nothing ⇒ pure (Left "internal source-coordinate admission failed during enhancement")
+           red_mean ← local_mean background contrast x y 0
+           green_mean ← local_mean background contrast x y 1
+           blue_mean ← local_mean background contrast x y 2
+           let changed = RGB
+                 (cast (normalize_sample contrast red_mean (cast pixel.red)))
+                 (cast (normalize_sample contrast green_mean (cast pixel.green)))
+                 (cast (normalize_sample contrast blue_mean (cast pixel.blue)))
+           accepted ← put_pixel result x y changed
+           if accepted then pure (Right ())
+                       else pure (Left "internal output-coordinate admission failed during enhancement")
+         | Left message ⇒ pure (Left message)
+       pure (Right result)

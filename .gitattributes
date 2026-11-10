@@ -1,0 +1,5 @@
+*.idric linguist-language=Idris
+*.tsv text eol=lf
+*.md text eol=lf
+# Keep compiler and runtime diagnostic output verbatim.
+evidence/host/*.log -whitespace
