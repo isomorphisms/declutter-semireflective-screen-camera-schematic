@@ -1,0 +1,58 @@
+module FreshFiles
+
+import Data.Buffer
+import Data.List
+import Data.Text
+import System.FFI
+import System.File
+import System.File.Buffer
+
+-- Narrow qualified Linux/Chez FILE boundary. The inherited Mode enumeration
+-- has no exclusive creation, while its File wrapper already holds a FILE*.
+%foreign "C:fopen,libc 6"
+prim_open : Text → Text → PrimIO AnyPtr
+
+%foreign "C:fclose,libc 6"
+prim_close : AnyPtr → PrimIO Int
+
+open_new_file : Text → IO (Either Text File)
+open_new_file path = do
+  if path ≟ "" || length (unpack path) > 4096 || elem '\0' (unpack path)
+     then pure (Left "OUTPUT_PATH: empty, NUL-containing or excessive filesystem name")
+     else do
+       pointer ← primIO (prim_open path "wbx")
+       pure (if prim__nullAnyPtr pointer /= 0
+               then Left ("EXCLUSIVE_CREATE: destination exists or cannot be created: " ++ path)
+               else Right (FHandle pointer))
+
+close_checked : File → IO (Either Text ())
+close_checked (FHandle pointer) = do
+  status ← primIO (prim_close pointer)
+  pure (if status ≟ 0 then Right () else Left "OUTPUT_CLOSE: flush/close failed")
+
+export
+write_new_buffer : Text → Buffer → Int → IO (Either Text ())
+write_new_buffer path bytes count = do
+  extent ← rawSize bytes
+  if count < 0 || count > extent
+     then pure (Left "OUTPUT_BOUNDS: requested bytes exceed the buffer")
+     else do
+       Right file ← open_new_file path
+         | Left message ⇒ pure (Left message)
+       written ← writeBufferData file bytes 0 count
+       closed ← close_checked file
+       case written of
+         Left (error, completed) ⇒ pure (Left ("OUTPUT_WRITE: after " ++ show completed ++
+                                               " bytes: " ++ show error))
+         Right () ⇒ pure closed
+
+export
+write_new_text : Text → Text → IO (Either Text ())
+write_new_text path text = do
+  Right file ← open_new_file path
+    | Left message ⇒ pure (Left message)
+  written ← fPutStr file text
+  closed ← close_checked file
+  case written of
+    Left error ⇒ pure (Left ("OUTPUT_WRITE: " ++ show error))
+    Right () ⇒ pure closed

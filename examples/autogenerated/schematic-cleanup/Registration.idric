@@ -4,6 +4,8 @@ import Data.List
 import Data.Maybe
 import Data.Text
 import SchematicRaster
+import RunPaths
+import FreshFiles
 import System
 import System.File
 
@@ -345,6 +347,8 @@ render_observations plan first second masks destination = do
      else if not (overlap_at_seam plan)
        then pure (Left "proposed seam has no geometrically shared source observation")
      else do
+       Right () ← admit_run [] [destination, destination ++ ".sources.pnm"]
+         | Left message ⇒ pure (Left message)
        Right output ← new_image plan.frame.columns plan.frame.rows
          | Left message ⇒ pure (Left message)
        Right source_map ← new_image plan.frame.columns plan.frame.rows
@@ -412,6 +416,10 @@ main = do
   arguments ← getArgs
   case arguments of
     [_, plan_path, input_directory, destination] ⇒ do
+      Right () ← admit_sources [plan_path]
+        | Left message ⇒ do
+            putStrLn ("FAIL: " ++ message)
+            exitFailure
       Right content ← readFile plan_path
         | Left error ⇒ do
             putStrLn ("FAIL: cannot read registration plan: " ++ show error)
@@ -422,6 +430,12 @@ main = do
             exitFailure
       let first_path = input_directory ++ "/" ++ plan.earlier.name
       let second_path = input_directory ++ "/" ++ plan.later.name
+      Right () ← admit_run [plan_path, first_path, second_path,
+                            first_path ++ ".sources.pnm", second_path ++ ".sources.pnm"]
+                           [destination, destination ++ ".sources.pnm", destination ++ ".provenance.tsv"]
+        | Left message ⇒ do
+            putStrLn ("FAIL: " ++ message)
+            exitFailure
       if destination ≟ first_path || destination ≟ second_path
          then do
            putStrLn "FAIL: output must differ from both input files"
@@ -447,9 +461,9 @@ main = do
              | Left message ⇒ do
                  putStrLn ("FAIL: " ++ message)
                  exitFailure
-           Right () ← writeFile (destination ++ ".provenance.tsv") (provenance plan)
-             | Left error ⇒ do
-                 putStrLn ("FAIL: image written but provenance failed: " ++ show error)
+           Right () ← write_new_text (destination ++ ".provenance.tsv") (provenance plan)
+             | Left message ⇒ do
+                 putStrLn ("FAIL: image written but provenance failed: " ++ message)
                  exitFailure
            putStrLn ("PASS: registered source-selected pair: " ++ destination)
     _ ⇒ do

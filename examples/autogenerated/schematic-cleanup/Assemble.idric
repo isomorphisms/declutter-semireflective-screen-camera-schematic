@@ -5,6 +5,7 @@ import Data.Text
 import System
 import System.File
 import SchematicRaster
+import RunPaths
 
 -- Layouts place source rectangles at their original sampling density.
 -- They deliberately preserve a gutter where circuit registration is unknown.
@@ -100,9 +101,13 @@ fill_gutters canvas =
 covering
 assemble : Text → Text → Text → IO (Either Text ())
 assemble layout_path input_directory output_path = do
+  Right () ← admit_sources [layout_path]
+    | Left message ⇒ pure (Left message)
   Right text ← readFile layout_path
     | Left error ⇒ pure (Left ("cannot read layout: " ++ show error))
   Right layout ← pure (parse_layout text)
+    | Left message ⇒ pure (Left message)
+  Right () ← admit_run (layout_path :: map (\section ⇒ input_directory ++ "/" ++ section.source_name) layout.sections) [output_path]
     | Left message ⇒ pure (Left message)
   if not (disjoint_sections layout.sections)
      then pure (Left "overlapping destination rectangles would silently overwrite source evidence")

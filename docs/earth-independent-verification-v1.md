@@ -7,6 +7,11 @@ implementation belongs to Earth. No Moon propagation is admitted yet.
 
 ## EARTH-RETECH-OUTPUT-ADMISSION-01 — existing sole production owner
 
+**Completed by [path admission v1](path-admission-v1.md).** The original assignment
+below is retained for context; reconcile that passing implementation rather
+than starting a duplicate repair. New optical outputs use complete admission
+and fresh writers. Photographic acceptance remains a separate requirement.
+
 ```text
 Model: Earth
 Reasoning: High

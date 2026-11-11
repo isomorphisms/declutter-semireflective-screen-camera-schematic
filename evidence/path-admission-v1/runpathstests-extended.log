@@ -1,0 +1,22 @@
+realpath: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/missing-parent: No such file or directory
+PASS	fresh destination with spaces admitted
+PASS	dot-alias	INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/./source with spaces
+PASS	symlink-parent-input-alias	INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/directory-alias/source with spaces
+PASS	future-output-output-alias	OUTPUT_OUTPUT_COLLISION: two destinations resolve to the same filesystem name
+PASS	missing-parent-before-any-write	PATH_METADATA: cannot resolve path: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/missing-parent
+PASS	newline-path	PATH_SYNTAX: invalid path text
+PASS	NUL-path	PATH_SYNTAX: invalid path text
+PASS	hard-link-output	OUTPUT_EXISTS: destination must be new: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/hard-link
+PASS	dangling-output	OUTPUT_EXISTS: destination must be new: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/dangling
+PASS	FIFO-source-rejected-without-opening	SOURCE_PATH: input must be an existing regular file: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/source-fifo
+PASS	directory-source-rejected	SOURCE_PATH: input must be an existing regular file: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO
+PASS	exclusive-text-existing-file	EXCLUSIVE_CREATE: destination exists or cannot be created: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/source with spaces
+PASS	exclusive-text-hard-link	EXCLUSIVE_CREATE: destination exists or cannot be created: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/hard-link
+PASS	exclusive-text-dangling-link	EXCLUSIVE_CREATE: destination exists or cannot be created: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/dangling
+PASS	repeat-output-refused	EXCLUSIVE_CREATE: destination exists or cannot be created: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/new output 
+PASS	binary-buffer-overrun	OUTPUT_BOUNDS: requested bytes exceed the buffer
+PASS	binary-negative-size	OUTPUT_BOUNDS: requested bytes exceed the buffer
+PASS	exclusive-binary-existing-file	EXCLUSIVE_CREATE: destination exists or cannot be created: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/source with spaces
+PASS	symlink-inserted-after-admission	EXCLUSIVE_CREATE: destination exists or cannot be created: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/late-input-alias
+PASS	hard-link-inserted-after-admission	EXCLUSIVE_CREATE: destination exists or cannot be created: /workspace/scratch/5cf074ba5c15/private/path-tests-final.G32XRO/late-hard-link
+PASS	path admission, exclusive writes, late-alias refusal and protected source bytes

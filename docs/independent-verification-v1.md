@@ -1,5 +1,10 @@
 # Independent fidelity verification — executable first slice
 
+**Later collision repair:** [path admission v1](path-admission-v1.md) fixes the
+production collision cases with complete preflight and exclusive fresh writes.
+The red collision observations below remain historical baseline evidence.
+The separate 24V marking-preservation failure remains open.
+
 The first photographic coverage slice passes. **Full fidelity does not pass.**
 The unchanged baseline loses a frozen local contrast relation in the 1718
 `24V DC` marking, and the companion-output collision regression is red.

@@ -1,0 +1,20 @@
+boundary	status	evidence
+source-compiler	PASS	Pinned2bce7677f513d711875e978bd6f5ad28b9e54d58; explicitChez10.4.1/Linuxx86-64/glibc2.41/coreutils9.7
+original-collision-regression	PASS	13 previously executed cases reject before creation; every protected digest unchanged
+expanded-command-collision-regression	PASS	24 negative cases; exit1 not crash/timeout; unchanged inputs and no new partial output for each static collision
+positive-command-behavior	PASS	Cleanup/Aperture/Registration/Assemble execute safely; tiny crop/aperture/assembly bytes match source
+direct-path-and-writer-tests	PASS	21 PASS records including summary; NUL/newline/aliases/special inputs/buffer bounds/late alias insertion
+late-symlink-and-hardlink	PASS	Actual writers invoked after alias insertion; EXCLUSIVE_CREATE rejects; source bytes unchanged
+known-bad-oracle-check	PASS	Old production binaries fail expanded suite exit1; partial writes/input damage/timeout correctly not accepted
+existing-raster-suite	PASS	34 PASS records including summary
+existing-registration-suite	PASS	46 PASS records including summary
+real-photo-processing	PASS	4 producers execute privately; matching enhancement/mask/registration/map/whole-control-reference comparisons byte-identical
+original-and-baseline-preservation	PASS	All12 original JPEG digests and retained baseline input/output hashes unchanged
+wrong-baseline-frame-diagnostic	RESOLVED	Packed observation is unmasked; new masked output differs; matching old masked reference compares byte-identically
+replacement-of-existing-outputs	REFUSED_BY_DESIGN	Fresh stems/directories required; no implicit replacement or force flag
+atomic-multi-file-publication	NOT_IMPLEMENTED	Late namespace conflict or I/O failure may leave new incomplete bundle; failure reported; no rollback deletes another process file
+other-platforms-filesystems	UNQUALIFIED	Only actual Linux/Chez/glibc/coreutils/overlayfs host executed; no general backend or case-folding-FS claim
+photographic-24V-marking-preservation	FAIL_UNCHANGED	This I/O repair preserves baseline pixels; existing local marking loss is separate optical work
+full-photographic-electrical-fidelity	PARTIAL	Coverage/overlap/topology and obscured connections retain existing unresolved status
+ci	NOT_RUN	Host evidence only; inspect published exact-head checks separately
+private-images	NOT_PUBLISHED	Real photographic outputs remain private; only text/source/digests in repository

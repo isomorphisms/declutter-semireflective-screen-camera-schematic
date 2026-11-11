@@ -3,6 +3,7 @@ module Aperture
 import Data.List
 import Data.Text
 import SchematicRaster
+import RunPaths
 import System
 import System.File
 
@@ -120,6 +121,8 @@ mask_observation window source destination =
   if image_width source /= window.columns || image_height source /= window.rows
      then pure (Left "source shape differs from the declared observation")
      else do
+       Right () ← admit_run [] [destination, destination ++ ".sources.pnm"]
+         | Left message ⇒ pure (Left message)
        Right output ← new_image window.columns window.rows
          | Left message ⇒ pure (Left message)
        Right identities ← new_image window.columns window.rows
@@ -146,6 +149,10 @@ main = do
   arguments ← getArgs
   case arguments of
     [_, mask_path, source_path, destination] ⇒ do
+      Right () ← admit_run [mask_path, source_path] [destination, destination ++ ".sources.pnm"]
+        | Left message ⇒ do
+            putStrLn ("FAIL: " ++ message)
+            exitFailure
       if source_path ≟ destination
          then do
            putStrLn "FAIL: output must differ from source"

@@ -1,0 +1,27 @@
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/aperture-image-companion.sources.pnm
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/aperture-window-companion.sources.pnm
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/aperture-window-primary
+FAIL: input and output paths must be distinct
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/cleanup-dot-alias-input
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/cleanup-symlink-companion.provenance.tsv
+FAIL: OUTPUT_EXISTS: destination must be new: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/cleanup-hardlink-companion.provenance.tsv
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/registration-image-companion.sources.pnm
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/registration-image-provenance.provenance.tsv
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/registration-map-companion
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/registration-plan-companion.sources.pnm
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/registration-plan-provenance.provenance.tsv
+FAIL: INPUT_OUTPUT_COLLISION: /workspace/scratch/5cf074ba5c15/private/path-regression.imJSvW/registration-plan-primary
+PASS	aperture-image-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	aperture-window-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	aperture-window-primary	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	cleanup-exact-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	cleanup-dot-alias	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	cleanup-symlink-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	cleanup-hardlink-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	registration-image-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	registration-image-provenance	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	registration-map-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	registration-plan-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	registration-plan-provenance	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	registration-plan-primary	exit=1	inputs-preserved=True	no-new-outputs=True
+PASS	all unsafe invocations rejected before writing; input bytes preserved

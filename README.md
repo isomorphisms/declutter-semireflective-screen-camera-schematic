@@ -9,8 +9,10 @@ Every reference-sheet pixel independently replays from original RGB or grey.
 
 The [independent fidelity slice](docs/independent-verification-v1.md) now executes:
 known original conductor/mark witnesses pass and deliberate erasure fails.
-The broader 1718 24V marking regression and companion-output collision suite
-remain **FAIL**. Correct enhancement arithmetic and valid provenance do not
+The [companion-output collision repair](docs/path-admission-v1.md) now passes
+the expanded 24-case suite: every output must be new and is created exclusively.
+Reruns need fresh output stems/directories; existing files are never replaced.
+The broader 1718 24V marking regression remains **FAIL**. Correct enhancement arithmetic and valid provenance do not
 grant photographic acceptance. Remaining bounded work is in the
 [Earth verification jobs](docs/earth-independent-verification-v1.md).
 

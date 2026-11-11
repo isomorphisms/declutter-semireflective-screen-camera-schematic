@@ -3,6 +3,8 @@ module Cleanup
 import Data.List
 import Data.Text
 import SchematicRaster
+import RunPaths
+import FreshFiles
 import System
 import System.File
 
@@ -32,10 +34,12 @@ distinct_output_paths source destination =
 covering
 save_result : Text → Image → Text → IO ()
 save_result destination image provenance = do
+  Right () ← admit_run [] [destination, destination ++ ".provenance.tsv"]
+    | Left message ⇒ fail_with message
   Right () ← write_ppm destination image
     | Left message ⇒ fail_with message
-  Right () ← writeFile (destination ++ ".provenance.tsv") provenance
-    | Left error ⇒ fail_with ("image saved but provenance write failed: " ++ show error)
+  Right () ← write_new_text (destination ++ ".provenance.tsv") provenance
+    | Left message ⇒ fail_with ("image saved but provenance write failed: " ++ message)
   putStrLn ("PASS: " ++ destination ++ " " ++ show (image_width image) ++ "×" ++ show (image_height image))
 
 identity_provenance : Text → Image → Text
@@ -47,6 +51,8 @@ identity_provenance source image =
 covering
 run_enhancement : Text → Text → Parameters → IO ()
 run_enhancement source destination contrast = do
+  Right () ← admit_run [source] [destination, destination ++ ".provenance.tsv"]
+    | Left message ⇒ fail_with message
   Right image ← read_ppm source
     | Left message ⇒ fail_with message
   Right enhanced ← enhance image contrast
@@ -61,6 +67,8 @@ run_enhancement source destination contrast = do
 covering
 run_crop : Text → Text → Int → Int → Int → Int → IO ()
 run_crop source destination left top width height = do
+  Right () ← admit_run [source] [destination, destination ++ ".provenance.tsv"]
+    | Left message ⇒ fail_with message
   Right image ← read_ppm source
     | Left message ⇒ fail_with message
   Right cropped ← crop_image image left top width height

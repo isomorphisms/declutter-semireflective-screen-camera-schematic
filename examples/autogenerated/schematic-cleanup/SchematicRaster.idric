@@ -4,6 +4,7 @@ import Data.Buffer
 import Data.List
 import Data.So
 import Data.Text
+import FreshFiles
 import System.File
 import System.File.Buffer
 
@@ -287,11 +288,7 @@ write_ppm path image = do
      else do
        setString output 0 header
        copyData image.pixels.storage image.pixels.beginning payload_size output header_size
-       result ← writeBufferToFile path output total_size
-       case result of
-         Left (error, count) ⇒ pure (Left ("cannot write output after " ++ show count ++
-                                           " bytes: " ++ show error))
-         Right () ⇒ pure (Right ())
+       write_new_buffer path output total_size
 
 export
 copy_rectangle : Image → Image → Int → Int → Int → Int → Int → Int → IO (Either Text ())

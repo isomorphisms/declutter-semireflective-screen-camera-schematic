@@ -1,0 +1,46 @@
+PASS: identity admitted
+PASS: zero determinant refused
+PASS: maximum signed coefficient refused before squaring
+PASS: minimum signed coefficient refused without abs overflow
+PASS: independent quarter-turn forward coordinate
+PASS: independent quarter-turn inverse coordinate
+PASS: negative nearest-neighbour tie rounds away from zero
+PASS: negative origin retains conventional axes
+PASS: largest admitted coordinates remain exact under identity
+PASS: overflow-sized point refused
+PASS: zero inverse refused explicitly
+PASS: photographic fixed-point roundtrip within one native pixel
+PASS: known-good seven-directive plan admitted
+PASS: negative canvas rejected
+PASS: unsupported side length rejected
+PASS: unsupported pixel count rejected
+PASS: negative region coordinate rejected
+PASS: path traversal rejected
+PASS: duplicate source identity rejected
+PASS: huge decimal coefficient rejected before casting
+PASS: singular plan rejected
+PASS: seam outside canvas rejected
+PASS: unbounded output origin rejected
+PASS: negative seam gap rejected
+PASS: missing directive rejected
+PASS: extra directive rejected
+PASS: non-square output dimensions
+PASS: unobserved negative anchor is grey
+PASS: earlier-preferred fallback selects later exact RGB
+PASS: earlier row preserves RGB identity
+PASS: earlier last column preserves row-major RGB
+PASS: later row is selected below seam
+PASS: later-preferred fallback selects earlier exact RGB
+PASS: unobserved last row remains grey
+PASS: map records unknown
+PASS: map records earlier
+PASS: map records later fallback
+PASS: map replays exact source coordinate
+PASS: incorrect geometric overlap assumption rejected
+PASS: rectangle outside actual source rejected
+PASS: explicit unknown seam prevents fabricated connection
+PASS: occluded preferred source falls back to observed alternate
+PASS: recovered pixel retains original photograph identity
+PASS: two excluded observations remain explicitly unknown
+PASS: transposed source-selection map shape rejected
+PASS: registration source identity, coordinates and negative controls
