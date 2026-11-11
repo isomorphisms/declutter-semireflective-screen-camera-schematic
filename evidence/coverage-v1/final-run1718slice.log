@@ -1,0 +1,6 @@
+PASS	supply-N-fragment	original-1718-horizontal-red-fragment-right-of-N
+PASS	supply-L-mark	original-1718-L-terminal-letter-no-identity-beyond-visible-L
+UNRESOLVED	supply-glare-connection	hand-overlaps-wire-no-endpoint-or-continuity-assertion
+CONTAMINATION	hand-contour	original-hand-reflection-not-schematic
+UNRESOLVED	supply-hidden-terminal	no-legible-identity-asserted
+PASS	coverage-v1 admitted native photographic slice; broader fidelity UNRESOLVED

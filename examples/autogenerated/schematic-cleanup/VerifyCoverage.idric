@@ -1,0 +1,362 @@
+module VerifyCoverage
+
+import Data.List
+import Data.Text
+import SchematicRaster
+import System
+import System.File
+
+public export
+choice evidence_state one_of
+  observed
+  ambiguous
+  unobserved
+
+public export
+choice feature_kind one_of
+  wire_segment
+  wire_endpoint
+  junction_dot
+  contact_gap
+  separate_conductors
+  terminal_mark
+  legible_text
+  contamination
+
+public export
+record Witness where
+  constructor WitnessedFeature
+  name : Text
+  kind : feature_kind
+  state : evidence_state
+  left : Int
+  top : Int
+  columns : Int
+  rows : Int
+  evidence : Text
+  corroboration : Text
+
+public export
+record ContrastProbe where
+  constructor StrokeBesideBackground
+  witness_name : Text
+  mark_x : Int
+  mark_y : Int
+  background_x : Int
+  background_y : Int
+  channel : Int
+  original_mark : Pixel
+  original_background : Pixel
+
+public export
+record CoverageManifest where
+  constructor NativePreservationSlice
+  source_id : Int
+  source_width : Int
+  source_height : Int
+  jpeg_sha256 : Text
+  decoded_sha256 : Text
+  sheet : Text
+  output_width : Int
+  output_height : Int
+  column_translation : Int
+  row_translation : Int
+  layout_sha256 : Text
+  baseline_revision : Text
+  witnesses : List Witness
+  probes : List ContrastProbe
+
+number : Text → Either Text Int
+number text = case parseInteger {a = Integer} text of
+  Just value ⇒ if value >= -32768 && value <= 32768
+                  then Right (cast value) else Left "manifest integer outside coordinate bounds"
+  Nothing ⇒ Left "invalid manifest integer"
+
+digest : Number → Text → Bool
+digest size text = length (unpack text) ≟ size &&
+  all (\character ⇒ isDigit character || elem character (unpack "abcdef")) (unpack text)
+
+kind_from : Text → Either Text feature_kind
+kind_from "wire-segment" = Right wire_segment
+kind_from "wire-endpoint" = Right wire_endpoint
+kind_from "junction-dot" = Right junction_dot
+kind_from "contact-gap" = Right contact_gap
+kind_from "separate-conductors" = Right separate_conductors
+kind_from "terminal-mark" = Right terminal_mark
+kind_from "text" = Right legible_text
+kind_from "contamination" = Right contamination
+kind_from _ = Left "unsupported witness kind"
+
+state_from : Text → Either Text evidence_state
+state_from "observed" = Right observed
+state_from "ambiguous" = Right ambiguous
+state_from "unobserved" = Right unobserved
+state_from _ = Left "unsupported evidence state"
+
+export
+required : Witness → Bool
+required witness = case (witness.state, witness.kind) of
+  (observed, contamination) ⇒ False
+  (observed, _) ⇒ True
+  _ ⇒ False
+
+is_wire : Witness → Bool
+is_wire witness = case witness.kind of
+  wire_segment ⇒ required witness
+  _ ⇒ False
+
+is_marking : Witness → Bool
+is_marking witness = case witness.kind of
+  terminal_mark ⇒ required witness
+  legible_text ⇒ required witness
+  _ ⇒ False
+
+parse_witness : Text → Either Text Witness
+parse_witness line = case words line of
+  ["witness", name, kind, state, x, y, width, height, evidence, corroboration] ⇒ do
+    feature ← kind_from kind
+    observation ← state_from state
+    left ← number x
+    top ← number y
+    columns ← number width
+    rows ← number height
+    if left < 0 || top < 0 || columns <= 0 || rows <= 0 || columns × rows > 4096 ||
+       evidence ≟ "none" || name ≟ ""
+       then Left "witness requires a bounded native rectangle and original evidence"
+       else Right (WitnessedFeature name feature observation left top columns rows evidence corroboration)
+  _ ⇒ Left "invalid witness row"
+
+rgb_from : Text → Text → Text → Either Text Pixel
+rgb_from red green blue = do
+  r ← number red
+  g ← number green
+  b ← number blue
+  if all (\value ⇒ value >= 0 && value <= 255) [r, g, b]
+     then Right (RGB (cast r) (cast g) (cast b))
+     else Left "probe RGB outside byte range"
+
+parse_probe : Text → Either Text ContrastProbe
+parse_probe line = case words line of
+  ["probe", name, mx, my, bx, by, channel, mr, mg, mb, br, bg, bb] ⇒ do
+    mark_x ← number mx
+    mark_y ← number my
+    background_x ← number bx
+    background_y ← number by
+    selected ← number channel
+    mark ← rgb_from mr mg mb
+    background ← rgb_from br bg bb
+    if selected < 0 || selected > 2
+       then Left "probe channel must be 0, 1 or 2"
+       else Right (StrokeBesideBackground name mark_x mark_y background_x background_y
+                                         selected mark background)
+  _ ⇒ Left "invalid contrast-probe row"
+
+inside : Witness → Int → Int → Bool
+inside witness x y = x >= witness.left && y >= witness.top &&
+  x < witness.left + witness.columns && y < witness.top + witness.rows
+
+valid_probe : List Witness → ContrastProbe → Bool
+valid_probe witnesses probe = any (\witness ⇒ witness.name ≟ probe.witness_name &&
+  required witness && inside witness probe.mark_x probe.mark_y &&
+  inside witness probe.background_x probe.background_y) witnesses
+
+unique : List Text → Bool
+unique [] = True
+unique (name :: rest) = not (elem name rest) && unique rest
+
+active : Text → Bool
+active line = trim line /= "" && not (isPrefixOf "#" (trim line))
+
+export
+parse_manifest : Text → Either Text CoverageManifest
+parse_manifest text =
+  if length (unpack text) > 65536 then Left "manifest exceeds 64 KiB limit" else
+  case filter active (lines text) of
+    version :: source :: target :: review :: rest ⇒
+      case (words version, words source, words target, words review) of
+        (["version", "coverage-v1"],
+         ["source", identity, "photograph", width, height, jpeg, decoded],
+         ["target", sheet, "output", ow, oh, dx, dy, layout, revision],
+         ["review", "agent-original-inspection"]) ⇒ do
+          source_id ← number identity
+          source_width ← number width
+          source_height ← number height
+          output_width ← number ow
+          output_height ← number oh
+          column_translation ← number dx
+          row_translation ← number dy
+          let witness_lines = filter (isPrefixOf "witness ") rest
+          let probe_lines = filter (isPrefixOf "probe ") rest
+          witnesses ← traverse parse_witness witness_lines
+          probes ← traverse parse_probe probe_lines
+          let rectangle_fits = \witness ⇒
+                witness.left + witness.columns <= source_width &&
+                witness.top + witness.rows <= source_height &&
+                witness.left + column_translation >= 0 && witness.top + row_translation >= 0 &&
+                witness.left + witness.columns + column_translation <= output_width &&
+                witness.top + witness.rows + row_translation <= output_height
+          if length rest /= length witness_lines + length probe_lines ||
+             length witnesses > 64 || length probes > 256 ||
+             source_id <= 0 || source_id >= 232 ||
+             source_width <= 0 || source_height <= 0 || output_width <= 0 || output_height <= 0 ||
+             source_width × source_height > 40000000 || output_width × output_height > 40000000 ||
+             not (digest 64 jpeg && digest 64 decoded && digest 64 layout && digest 40 revision) ||
+             not (unique (map name witnesses)) || not (all rectangle_fits witnesses)
+             then Left "invalid manifest identity, frame, shape, bounds, digest or dependency"
+             else if not (any is_wire witnesses && any is_marking witnesses) ||
+                     any (\witness ⇒ required witness &&
+                          not (any (\probe ⇒ probe.witness_name ≟ witness.name) probes)) witnesses
+               then Left "NONVACUITY: require observed conductor, marking and probes for every required witness"
+               else if not (all (valid_probe witnesses) probes)
+                 then Left "probe dependency does not belong to an observed witness"
+               else Right (NativePreservationSlice source_id source_width source_height jpeg decoded
+                           sheet output_width output_height column_translation row_translation
+                           layout revision witnesses probes)
+        _ ⇒ Left "manifest requires version/source-photograph/target-output/agent-review headers"
+    _ ⇒ Left "manifest has no admitted witnesses"
+
+same_pixel : Pixel → Pixel → Bool
+same_pixel first second = first.red ≟ second.red && first.green ≟ second.green && first.blue ≟ second.blue
+
+channel_value : Int → Pixel → Int
+channel_value 0 pixel = cast pixel.red
+channel_value 1 pixel = cast pixel.green
+channel_value _ pixel = cast pixel.blue
+
+export
+verify_probe : CoverageManifest → Image → Image → ContrastProbe → IO (Either Text ())
+verify_probe manifest original candidate probe = do
+  Just source_mark ← pixel_at original probe.mark_x probe.mark_y
+    | Nothing ⇒ pure (Left "SOURCE_FRAME: mark coordinate absent")
+  Just source_background ← pixel_at original probe.background_x probe.background_y
+    | Nothing ⇒ pure (Left "SOURCE_FRAME: background coordinate absent")
+  if not (same_pixel source_mark probe.original_mark && same_pixel source_background probe.original_background)
+     then pure (Left ("SOURCE_IDENTITY: frozen RGB disagrees for " ++ probe.witness_name))
+     else do
+       let original_difference = channel_value probe.channel source_background - channel_value probe.channel source_mark
+       if original_difference < 8
+          then pure (Left ("UNSUPPORTED_WITNESS: original stroke/background difference below 8 for " ++ probe.witness_name))
+          else do
+            Just mark ← pixel_at candidate (probe.mark_x + manifest.column_translation)
+                                           (probe.mark_y + manifest.row_translation)
+              | Nothing ⇒ pure (Left "OUTPUT_FRAME: mark coordinate absent")
+            Just background ← pixel_at candidate (probe.background_x + manifest.column_translation)
+                                                 (probe.background_y + manifest.row_translation)
+              | Nothing ⇒ pure (Left "OUTPUT_FRAME: background coordinate absent")
+            let difference = channel_value probe.channel background - channel_value probe.channel mark
+            let minimum = max 4 ((original_difference + 1) `div` 2)
+            if difference < minimum
+               then pure (Left ("LOCAL_INFORMATION: " ++ probe.witness_name ++ " at " ++
+                    show probe.mark_x ++ "," ++ show probe.mark_y ++ " contrast=" ++
+                    show difference ++ " required=" ++ show minimum))
+               else pure (Right ())
+
+export
+verify_witness : CoverageManifest → Image → Image → Image → Image → Witness → IO (Either Text ())
+verify_witness manifest original reference candidate identities witness =
+  if not (required witness) then pure (Right ()) else do
+    Right () ← for_indices_result (cast witness.rows) witness.top $ \row ⇒
+      for_indices_result (cast witness.columns) witness.left $ \column ⇒ do
+        let x = column + manifest.column_translation
+        let y = row + manifest.row_translation
+        Just identity ← pixel_at identities x y
+          | Nothing ⇒ pure (Left ("OUTPUT_FRAME: " ++ witness.name))
+        if cast {to = Int} identity.red /= manifest.source_id ||
+           identity.green /= identity.red || identity.blue /= identity.red
+           then pure (Left ((if identity.red ≟ 0 || identity.red ≟ 232
+                             then "COVERAGE_LOSS: " else "SOURCE_MAP_IDENTITY: ") ++
+                            witness.name ++ " at output " ++ show x ++ "," ++ show y))
+           else do
+             Just expected ← pixel_at original column row
+               | Nothing ⇒ pure (Left ("SOURCE_FRAME: " ++ witness.name))
+             Just actual ← pixel_at reference x y
+               | Nothing ⇒ pure (Left ("OUTPUT_FRAME: " ++ witness.name))
+             if same_pixel actual expected then pure (Right ())
+               else pure (Left ("REFERENCE_CONTENT: " ++ witness.name ++ " at output " ++ show x ++ "," ++ show y))
+      | Left message ⇒ pure (Left message)
+    traverse_probes (filter (\probe ⇒ probe.witness_name ≟ witness.name) manifest.probes)
+  where
+    traverse_probes : List ContrastProbe → IO (Either Text ())
+    traverse_probes [] = pure (Right ())
+    traverse_probes (probe :: rest) = do
+      Right () ← verify_probe manifest original candidate probe
+        | Left message ⇒ pure (Left message)
+      traverse_probes rest
+
+export
+verify_coverage : CoverageManifest → Image → Image → Image → Image → IO (Either Text ())
+verify_coverage manifest original reference candidate identities =
+  if not (any is_wire manifest.witnesses && any is_marking manifest.witnesses) ||
+     any (\witness ⇒ required witness &&
+          not (any (\probe ⇒ probe.witness_name ≟ witness.name) manifest.probes)) manifest.witnesses
+     then pure (Left "NONVACUITY: verifier requires observed conductor, marking and required probes")
+  else if image_width original /= manifest.source_width || image_height original /= manifest.source_height ||
+     not (all (\image ⇒ image_width image ≟ manifest.output_width &&
+                        image_height image ≟ manifest.output_height) [reference, candidate, identities])
+     then pure (Left "FRAME_SHAPE: source or output differs from frozen manifest")
+     else do
+       -- Reject foreign photograph IDs even where no protected rectangle lies.
+       -- This checks ownership, separately from a mask crossing a known feature.
+       let allowed = the (List Int) $ if manifest.sheet ≟ "control" then [0, 232, 12, 13, 15, 16, 17, 18]
+                     else if manifest.sheet ≟ "power" then [0, 232, 20, 21, 22, 23]
+                     else [0, 232, manifest.source_id]
+       Right () ← for_indices_result (cast (image_height identities)) 0 $ \y ⇒
+         for_indices_result (cast (image_width identities)) 0 $ \x ⇒ do
+           Just identity ← pixel_at identities x y
+             | Nothing ⇒ pure (Left "OUTPUT_FRAME: missing map sample")
+           if identity.red /= identity.green || identity.red /= identity.blue ||
+              not (elem (cast {to = Int} identity.red) allowed)
+              then pure (Left "SOURCE_MAP_IDENTITY: foreign photograph or unequal channels in target frame")
+              else pure (Right ())
+         | Left message ⇒ pure (Left message)
+       check_witnesses manifest.witnesses
+  where
+    check_witnesses : List Witness → IO (Either Text ())
+    check_witnesses [] = pure (Right ())
+    check_witnesses (witness :: rest) = do
+      Right () ← verify_witness manifest original reference candidate identities witness
+        | Left message ⇒ pure (Left message)
+      putStrLn ((if required witness then "PASS\t" else case witness.kind of
+                   contamination ⇒ "CONTAMINATION\t"
+                   _ ⇒ "UNRESOLVED\t") ++ witness.name ++ "\t" ++ witness.evidence)
+      check_witnesses rest
+
+covering
+export
+require_right : Either Text value → IO value
+require_right (Right value) = pure value
+require_right (Left message) = do
+  putStrLn ("FAIL\t" ++ message)
+  exitFailure
+
+-- SHA-256 is an explicitly recorded host admission boundary, not a claim that
+-- Image dimensions, a filename or map-provided source ID authenticates bytes.
+covering
+export
+verify_input_digest : Text → Text → IO (Either Text ())
+verify_input_digest expected path = do
+  (output, status) ← System.Escaped.run ["sha256sum", "--", path]
+  pure (if status ≟ 0 && head' (words output) ≟ Just expected then Right ()
+        else Left "SOURCE_DIGEST: original decoded P6 is not the frozen photograph")
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, manifest_path, original_path, reference_path, candidate_path, map_path] ⇒ do
+      Right text ← readFile manifest_path
+        | Left error ⇒ do
+            putStrLn ("FAIL\t" ++ show error)
+            exitFailure
+      manifest ← require_right (parse_manifest text)
+      _ ← verify_input_digest manifest.decoded_sha256 original_path >>= require_right
+      original ← read_ppm original_path >>= require_right
+      reference ← read_ppm reference_path >>= require_right
+      candidate ← read_ppm candidate_path >>= require_right
+      identities ← read_ppm map_path >>= require_right
+      _ ← verify_coverage manifest original reference candidate identities >>= require_right
+      putStrLn "PASS\tcoverage-v1 admitted native photographic slice; broader fidelity UNRESOLVED"
+    _ ⇒ do
+      putStrLn "usage: verify-coverage MANIFEST ORIGINAL.pnm REFERENCE.pnm CANDIDATE.pnm MAP.pnm"
+      exitFailure

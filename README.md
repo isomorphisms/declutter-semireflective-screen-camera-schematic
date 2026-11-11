@@ -7,6 +7,13 @@ all twelve photographs were processed. Main control and power sheets are
 native sampling atlases, and byte-identical PNG/P6 decoded RGB arrays.
 Every reference-sheet pixel independently replays from original RGB or grey.
 
+The [independent fidelity slice](docs/independent-verification-v1.md) now executes:
+known original conductor/mark witnesses pass and deliberate erasure fails.
+The broader 1718 24V marking regression and companion-output collision suite
+remain **FAIL**. Correct enhancement arithmetic and valid provenance do not
+grant photographic acceptance. Remaining bounded work is in the
+[Earth verification jobs](docs/earth-independent-verification-v1.md).
+
 See [current acceptance and remaining limits](docs/acceptance-v3.md) and
 [executed receipts](evidence/host-v3/commands.tsv). Reflection/dust and unproven
 joins keep photographic acceptance partial and this PR draft. Images stay private.

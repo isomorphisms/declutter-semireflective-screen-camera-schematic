@@ -1,0 +1,13 @@
+version coverage-v1
+source 15 photograph 1152 1536 8a2374b2232fa5054493b9f3a7663c934e00ea3cc7e516bf8d5c9e1ace511421 742d3e314e6385511ec10417ddc66bc4f596999352d6307d517c177ae2abcb11
+target control output 2448 3903 1176 -250 37673362ab3887f431e646cd01392513697ddc87e645b63a10bc7cae09e8ea9b 8145063ef13e3ddcda3284ed2ea7ccf6b6595b90
+review agent-original-inspection
+witness COM0-dot junction-dot observed 705 677 32 30 original-filled-node-at-COM0-horizontal-vertical-incidence none
+probe COM0-dot 720 689 730 697 1 88 46 58 109 113 114
+witness COM0-bus wire-segment observed 705 677 32 30 original-bus-fragment-in-node-region none
+probe COM0-bus 720 689 730 697 1 88 46 58 109 113 114
+witness TR1-gap contact-gap observed 350 850 40 35 original-separated-contact-bars-with-open-space none
+probe TR1-gap 362 867 370 867 1 107 75 76 115 118 107
+probe TR1-gap 378 867 370 867 1 97 69 68 115 118 107
+witness INPUT-label text observed 580 380 30 25 original-INPUT-T-STRIP-first-letter-stroke-only none
+probe INPUT-label 590 391 590 386 0 63 79 104 99 103 112

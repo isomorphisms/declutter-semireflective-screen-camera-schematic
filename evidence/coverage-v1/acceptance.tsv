@@ -1,0 +1,27 @@
+boundary	status	evidence
+compiler-source	PASS	4 new Idric modules compiled explicit Chez; pin2bce7677f513d711875e978bd6f5ad28b9e54d58; Linuxx86-64/Chez10.4.1
+original-identity	PASS	12 JPEG digests match source-manifest; both private package inventories pass; decoded original digest checked by verifier CLI
+first-real-photo-slice	PASS	1718 N conductor and visible L marking through baseline final control composition
+first-slice-erasure-controls	PASS	Conductor erasure and partial L-mark erasure rejected LOCAL_INFORMATION
+additional-photo-controls	PASS	1715 node/gap/INPUT stroke;1723 native-aperture rail/terminal; agent observations not human verification
+coverage-adversaries	PASS	Erasure/dot/label/mask/wrong-photo-map/grey-known/grey-unknown/all-unresolved/zero-witness/gap-bridge rejected
+actual-moved-aperture	PASS	Production aperture boundary moved across native1723 rail; independent verifier exits1 COVERAGE_LOSS
+actual-swapped-map	PASS	Same-sized1719 map in1723 native output rejected exit1 SOURCE_MAP_IDENTITY
+actual-wrong-original	PASS	Decoded1719 substituted for1718 rejected exit1 SOURCE_DIGEST
+broader-supply-label-preservation	FAIL	Observed1718(590,1257) and background(590,1246) both become white; original red contrast13 becomes0; required7
+legacy-enhancement-arithmetic	PASS	28 selected RGB points; independent direct Integer neighbourhoods; small floor/clipping/boundary fixtures
+enhancement-arithmetic-adversaries	PASS	Corrupt output and gain7 declared model rejected; information-preservation result remains separate
+future-masked-estimator	NOT_RUN	No qualified optical candidate available; independent signed/support/dependency extensions assigned Earth
+held-out-geometry-reuse	PASS	Unchanged LandmarkAudit;M2S-L2 squared2/T2 squared5;wrong-terminal exit1
+VerifyOverlap-module	NOT_IMPLEMENTED	Stroke-relative tolerances/repeated-rung/shifted-source suite assigned Earth; old audit retained
+node-gap-local-appearance	PASS	Observed dot and open bars retained; missing dot/filled gap rejected
+VerifyTopology-module	NOT_IMPLEMENTED	No general port/trace/incidence verification; bounded local graph job assigned Earth
+companion-input-collision-safety	FAIL	13 disposable cases;2 reject safely;11 violate pre-write invariant; symlink/hard-link input damage reproduced
+production-path-repair	PENDING	Sole owner EARTH-RETECH-OUTPUT-ADMISSION-01 from optical plan; verifier production modules untouched
+full-reference-replay	PASS	Existing VerifySource newly replays all9554544 control/5522304 power pixels
+main-PNG-P6-equality	PASS	6 fresh decoded RGB cmp comparisons exit0; paired hashes in rgb-equality.tsv
+all-section-independent-coverage	NOT_IMPLEMENTED	First slices only; no full-sheet fidelity PASS; preserve six control/four power sections
+electrical-continuity	UNRESOLVED	No seam/left-right continuity/obscured terminal identity inferred
+photographic-fidelity-overall	PARTIAL	First slice PASS; broader supply FAIL; glare/dust/reflections/unsupported identity unresolved
+github-actions	NOT_RUN	No workflow runs at inspected baseline; evidence is host execution
+private-image-publication	NOT_PERFORMED	Only source/text/manifests/hashes in repository; original/reference/candidate native crops retained privately
