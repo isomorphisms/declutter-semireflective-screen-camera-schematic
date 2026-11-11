@@ -1,0 +1,34 @@
+PASS: non-square input dimensions
+PASS: RGB row-major indexing across rows
+PASS: right boundary rejected
+PASS: negative row rejected
+PASS: bottom boundary write rejected
+PASS: rejected write did not alter input
+PASS: P6 write/read retains channel order
+PASS: whitespace-valued first pixel remains payload
+PASS: truncated RGB payload rejected
+PASS: trailing RGB payload rejected
+PASS: zero image width rejected
+PASS: 16-bit sample format rejected
+PASS: non-binary PNM rejected
+PASS: oversize header comment rejected
+PASS: overlapping copy retains first source pixel
+PASS: overlapping copy stages second source pixel
+PASS: crop dimensions
+PASS: crop preserves exact RGB sample
+PASS: copy source extent rejected
+PASS: overflow-sized source origin rejected
+PASS: overflow-sized target origin rejected
+PASS: rejected copy leaves target unchanged
+PASS: constant sample normalizes to white
+PASS: dark contrast arithmetic
+PASS: bright samples clip to white
+PASS: large gain clips at black
+PASS: invalid radius rejected
+PASS: invalid gain rejected
+PASS: fixture center write
+PASS: enhancement preserves dimensions
+PASS: independent 3×3 local-mean result
+PASS: corner rectangle clips within source bounds
+PASS: enhancement does not mutate the source
+PASS: raster admission, copy, and local-contrast acceptance

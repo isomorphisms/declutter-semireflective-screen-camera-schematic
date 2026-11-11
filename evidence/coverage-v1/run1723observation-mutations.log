@@ -1,0 +1,14 @@
+PASS	boundary-blue-rail	original-vertical-blue-rail-just-inside-glass-boundary
+PASS	M2S-middle-terminal	original-red-middle-terminal-ring-identity-not-transcribed
+UNRESOLVED	boundary-continuation	bezel-occludes-continuation-no-extension-asserted
+PASS	positive baseline before mutations
+PASS	mutation	erase-observed-feature	LOCAL_INFORMATION: boundary-blue-rail at 551,360 contrast=0 required=11
+PASS	mutation	mask-boundary-crosses-feature	COVERAGE_LOSS: boundary-blue-rail at output 545,355
+PASS	mutation	same-shape-wrong-photo-map	SOURCE_MAP_IDENTITY: foreign photograph or unequal channels in target frame
+PASS	mutation	all-grey-all-unknown	COVERAGE_LOSS: boundary-blue-rail at output 545,355
+PASS	mutation	all-grey-with-legitimate-map	LOCAL_INFORMATION: boundary-blue-rail at 551,360 contrast=0 required=11
+PASS	mutation	all-witnesses-unresolved-rejected-at-admission
+PASS	mutation	zero-admitted-witnesses	NONVACUITY: require observed conductor, marking and probes for every required witness
+PASS	boundary-blue-rail	original-vertical-blue-rail-just-inside-glass-boundary
+PASS	mutation	erase-part-of-label	LOCAL_INFORMATION: M2S-middle-terminal at 586,488 contrast=0 required=5
+PASS	coverage mutation suite; photographic scope remains bounded

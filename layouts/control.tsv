@@ -1,0 +1,11 @@
+# Original sampling is retained: one source pixel becomes one output pixel.
+# The grey gutters denote separate HMI viewports, not electrical connections.
+# 1718 repeats 1714 at a wider view and preserves its clipped left-side captions.
+canvas	2328	3720
+# source	left	top	width	height	destination_left	destination_top
+1000001712.ppm	0	40	1152	1350	0	0
+1000001713.ppm	0	70	1152	1320	0	1374
+1000001718.ppm	0	390	1152	1000	0	2718
+1000001715.ppm	0	280	1152	1090	1176	0
+1000001716.ppm	0	240	1152	1110	1176	1114
+1000001717.ppm	0	340	1152	1070	1176	2248

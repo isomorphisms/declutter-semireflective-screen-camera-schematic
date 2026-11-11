@@ -1,0 +1,106 @@
+module RunPaths
+
+import Data.List
+import Data.Text
+import System
+
+clean_path : Text → Bool
+clean_path path = path /= "" && length (unpack path) <= 4096 &&
+  not (any (\character ⇒ elem character ['\0', '\n', '\r', '\t']) (unpack path))
+
+-- Remove exactly the utility's one final newline. Do not trim legitimate spaces
+-- in a filename; paths with embedded record delimiters are rejected explicitly.
+one_result : Text → Either Text Text
+one_result text = case reverse (unpack text) of
+  '\n' :: rest ⇒ let path = pack (reverse rest) in
+    if clean_path path then Right path else Left "PATH_METADATA: malformed path result"
+  _ ⇒ Left "PATH_METADATA: missing single result delimiter"
+
+covering
+resolve : Bool → Text → IO (Either Text Text)
+resolve existing path =
+  if not (clean_path path) then pure (Left "PATH_SYNTAX: invalid path text") else do
+    (output, status) ← System.Escaped.run
+      ["realpath", if existing then "-e" else "-m", "-P", "--", path]
+    pure (if status ≟ 0 then one_result output
+          else Left ("PATH_METADATA: cannot resolve path: " ++ path))
+
+covering
+regular_source : Text → IO (Either Text Text)
+regular_source path = do
+  Right resolved ← resolve True path
+    | Left message ⇒ pure (Left message)
+  status ← System.Escaped.system ["test", "-f", resolved]
+  pure (if status ≟ 0 then Right resolved
+        else Left ("SOURCE_PATH: input must be an existing regular file: " ++ path))
+
+covering
+resolved_sources : List Text → IO (Either Text (List Text))
+resolved_sources [] = pure (Right [])
+resolved_sources (path :: rest) = do
+  Right resolved ← regular_source path
+    | Left message ⇒ pure (Left message)
+  Right remaining ← resolved_sources rest
+    | Left message ⇒ pure (Left message)
+  pure (Right (resolved :: remaining))
+
+covering
+export
+admit_sources : List Text → IO (Either Text ())
+admit_sources paths = do
+  Right _ ← resolved_sources paths
+    | Left message ⇒ pure (Left message)
+  pure (Right ())
+
+covering
+new_destination : List Text → Text → IO (Either Text Text)
+new_destination sources path = do
+  Right resolved ← resolve False path
+    | Left message ⇒ pure (Left message)
+  if elem resolved sources
+     then pure (Left ("INPUT_OUTPUT_COLLISION: " ++ path))
+     else do
+       present ← System.Escaped.system ["test", "-e", path]
+       link ← System.Escaped.system ["test", "-L", path]
+       if present ≟ 0 || link ≟ 0
+          then pure (Left ("OUTPUT_EXISTS: destination must be new: " ++ path))
+          else if present /= 1 || link /= 1
+            then pure (Left ("PATH_METADATA: destination presence could not be established: " ++ path))
+            else do
+              (parent_text, status) ← System.Escaped.run ["dirname", "--", path]
+              if status /= 0 then pure (Left "PATH_METADATA: cannot identify output parent") else do
+                Right parent ← pure (one_result parent_text)
+                  | Left message ⇒ pure (Left message)
+                Right parent_path ← resolve True parent
+                  | Left message ⇒ pure (Left message)
+                directory ← System.Escaped.system ["test", "-d", parent_path]
+                pure (if directory ≟ 0 then Right resolved
+                      else Left "OUTPUT_PARENT: output parent must be an existing directory")
+
+unique : List Text → Bool
+unique [] = True
+unique (path :: rest) = not (elem path rest) && unique rest
+
+covering
+destinations : List Text → List Text → IO (Either Text (List Text))
+destinations sources [] = pure (Right [])
+destinations sources (path :: rest) = do
+  Right resolved ← new_destination sources path
+    | Left message ⇒ pure (Left message)
+  Right remaining ← destinations sources rest
+    | Left message ⇒ pure (Left message)
+  pure (Right (resolved :: remaining))
+
+covering
+export
+admit_run : List Text → List Text → IO (Either Text ())
+admit_run inputs outputs =
+  if null outputs || length inputs > 1024 || length outputs > 16
+     then pure (Left "PATH_SET: missing outputs or excessive dependency set")
+     else do
+       Right sources ← resolved_sources inputs
+         | Left message ⇒ pure (Left message)
+       Right targets ← destinations sources outputs
+         | Left message ⇒ pure (Left message)
+       pure (if unique targets then Right ()
+             else Left "OUTPUT_OUTPUT_COLLISION: two destinations resolve to the same filesystem name")

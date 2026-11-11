@@ -1,0 +1,108 @@
+module Cleanup
+
+import Data.List
+import Data.Text
+import SchematicRaster
+import RunPaths
+import FreshFiles
+import System
+import System.File
+
+-- CLI effects can fail in the inherited host runtime. Pure image admission
+-- and transformation definitions remain under the language's total default.
+covering
+fail_with : Text → IO ()
+fail_with message = do
+  putStrLn ("FAIL: " ++ message)
+  exitFailure
+
+parse_argument : Text → Maybe Int
+parse_argument text =
+  if text ≟ "" || not (all isDigit (unpack text))
+     then Nothing
+     else case parseInteger text of
+       Just value ⇒ if value >= 0 && value <= 40000000 then Just (cast value) else Nothing
+       Nothing ⇒ Nothing
+
+clean_path : Text → Bool
+clean_path path = not (any (\character ⇒ character ≟ '\n' || character ≟ '\r' || character ≟ '\t') (unpack path))
+
+distinct_output_paths : Text → Text → Bool
+distinct_output_paths source destination =
+  not (source ≟ destination || source ≟ destination ++ ".provenance.tsv")
+
+covering
+save_result : Text → Image → Text → IO ()
+save_result destination image provenance = do
+  Right () ← admit_run [] [destination, destination ++ ".provenance.tsv"]
+    | Left message ⇒ fail_with message
+  Right () ← write_ppm destination image
+    | Left message ⇒ fail_with message
+  Right () ← write_new_text (destination ++ ".provenance.tsv") provenance
+    | Left message ⇒ fail_with ("image saved but provenance write failed: " ++ message)
+  putStrLn ("PASS: " ++ destination ++ " " ++ show (image_width image) ++ "×" ++ show (image_height image))
+
+identity_provenance : Text → Image → Text
+identity_provenance source image =
+  "source\t" ++ source ++ "\nsource_width\t" ++ show (image_width image) ++
+  "\nsource_height\t" ++ show (image_height image) ++
+  "\nspatial_mapping\toutput(x,y) = source(x,y)\nresampling\tnone\ncontent_generation\tnone\n"
+
+covering
+run_enhancement : Text → Text → Parameters → IO ()
+run_enhancement source destination contrast = do
+  Right () ← admit_run [source] [destination, destination ++ ".provenance.tsv"]
+    | Left message ⇒ fail_with message
+  Right image ← read_ppm source
+    | Left message ⇒ fail_with message
+  Right enhanced ← enhance image contrast
+    | Left message ⇒ fail_with message
+  let provenance = identity_provenance source image ++
+        "operation\tper-channel local-mean contrast\nradius\t" ++ show contrast.radius ++
+        "\ngain\t" ++ show contrast.gain ++ "\nnoise\t" ++ show contrast.noise ++
+        "\nformula\tmax(0,255-gain*max(0,local_mean-source_sample-noise))\n" ++
+        "interpretation\tlossy enhancement; not proof of reflection separation or electrical correctness\n"
+  save_result destination enhanced provenance
+
+covering
+run_crop : Text → Text → Int → Int → Int → Int → IO ()
+run_crop source destination left top width height = do
+  Right () ← admit_run [source] [destination, destination ++ ".provenance.tsv"]
+    | Left message ⇒ fail_with message
+  Right image ← read_ppm source
+    | Left message ⇒ fail_with message
+  Right cropped ← crop_image image left top width height
+    | Left message ⇒ fail_with message
+  let provenance = "source\t" ++ source ++ "\nsource_width\t" ++ show (image_width image) ++
+        "\nsource_height\t" ++ show (image_height image) ++
+        "\noperation\texact rectangular crop\nleft\t" ++ show left ++ "\ntop\t" ++ show top ++
+        "\nwidth\t" ++ show width ++ "\nheight\t" ++ show height ++
+        "\nspatial_mapping\toutput(x,y) = source(left+x,top+y)\nresampling\tnone\ncontent_generation\tnone\n"
+  save_result destination cropped provenance
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, "enhance", source, destination, radius_text, gain_text, noise_text] ⇒ do
+      if not (clean_path source && clean_path destination) then fail_with "paths may not contain tabs or line endings" else if not (distinct_output_paths source destination) then fail_with "input and output paths must be distinct" else do
+        Just radius ← pure (parse_argument radius_text)
+          | Nothing ⇒ fail_with "radius must be a nonnegative integer"
+        Just gain ← pure (parse_argument gain_text)
+          | Nothing ⇒ fail_with "gain must be a nonnegative integer"
+        Just noise ← pure (parse_argument noise_text)
+          | Nothing ⇒ fail_with "noise must be a nonnegative integer"
+        run_enhancement source destination (LocalContrast radius gain noise)
+    [_, "crop", source, destination, left_text, top_text, width_text, height_text] ⇒ do
+      if not (clean_path source && clean_path destination) then fail_with "paths may not contain tabs or line endings" else if not (distinct_output_paths source destination) then fail_with "input and output paths must be distinct" else do
+        Just left ← pure (parse_argument left_text)
+          | Nothing ⇒ fail_with "crop left must be a nonnegative integer"
+        Just top ← pure (parse_argument top_text)
+          | Nothing ⇒ fail_with "crop top must be a nonnegative integer"
+        Just width ← pure (parse_argument width_text)
+          | Nothing ⇒ fail_with "crop width must be a nonnegative integer"
+        Just height ← pure (parse_argument height_text)
+          | Nothing ⇒ fail_with "crop height must be a nonnegative integer"
+        run_crop source destination left top width height
+    _ ⇒ fail_with "usage: cleanup enhance INPUT.ppm OUTPUT.ppm RADIUS GAIN NOISE | cleanup crop INPUT.ppm OUTPUT.ppm LEFT TOP WIDTH HEIGHT"

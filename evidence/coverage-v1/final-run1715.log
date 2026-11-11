@@ -1,0 +1,5 @@
+PASS	COM0-dot	original-filled-node-at-COM0-horizontal-vertical-incidence
+PASS	COM0-bus	original-bus-fragment-in-node-region
+PASS	TR1-gap	original-separated-contact-bars-with-open-space
+PASS	INPUT-label	original-INPUT-T-STRIP-first-letter-stroke-only
+PASS	coverage-v1 admitted native photographic slice; broader fidelity UNRESOLVED

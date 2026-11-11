@@ -1,0 +1,22 @@
+identity	value
+job	EARTH-RETECH-OUTPUT-ADMISSION-01
+baseline_revision	dd3224a044d163c2b0f41d2ed6c4ee5d7f3176a1
+tested_implementation_revision	c64cbd354e1b5f2a8abf4b812d5dc0b6777ad8e8
+binding	Source/executable digests checked after tests; subsequent addition is receipt/attributes only
+compiler_revision	2bce7677f513d711875e978bd6f5ad28b9e54d58
+execution	Existing maintained edric bootstrap; explicit Chez10.4.1; Debian13.6/Linuxx86-64/glibc2.41/coreutils9.7/overlayfs
+output_policy	Fresh destinations only; all production P6/provenance opens exclusive; no truncate/replace
+original_collision_suite	PASS13
+expanded_collision_suite	PASS24 rejected cases;4 positive commands and input/byte comparison
+direct_path_write_suite	PASS21 records including summary
+existing_suites	Raster34;Registration46 PASS records including summaries
+known_bad_control	Old production executables rejected by expanded suite exit1
+real_photo_equality	6 correctly paired image/map P6 comparisons pass, including full control reference
+baseline_preservation	12 original JPEG identities and retained decoded inputs/sheets/maps unchanged
+resolved_comparison_error	An unmasked package observation was initially compared to masked output; matching pipeline-stage comparison passes
+diagnostics	Raw logs retain literal whitespace; gitattributes excludes only this receipt directory's logs from whitespace checks
+bundle_atomicity	NOT_IMPLEMENTED; late namespace/I/O failure can leave new incomplete outputs but reports failure
+other_platforms	UNQUALIFIED
+photographic_fidelity	PARTIAL;24V marking failure unchanged and separate
+ci	Host evidence only; no CI PASS asserted
+private_images	Not published

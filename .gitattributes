@@ -1,0 +1,7 @@
+*.idric linguist-language=Idris
+*.tsv text eol=lf
+*.md text eol=lf
+# Keep compiler and runtime diagnostic output verbatim.
+evidence/host/*.log -whitespace
+# Preserve literal diagnostic bytes, including tested trailing-space filenames.
+evidence/path-admission-v1/*.log -whitespace

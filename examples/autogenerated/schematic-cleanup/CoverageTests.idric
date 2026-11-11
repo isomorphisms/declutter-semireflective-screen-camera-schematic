@@ -1,0 +1,133 @@
+module CoverageTests
+
+import Data.List
+import Data.Text
+import SchematicRaster
+import VerifyCoverage
+import System
+import System.File
+
+covering
+fail_with : Text → IO value
+fail_with message = do
+  putStrLn ("FAIL\tTEST\t" ++ message)
+  exitFailure
+
+covering
+reject : Text → Text → Either Text value → IO ()
+reject label cause (Left message) =
+  if isPrefixOf cause message then putStrLn ("PASS\tmutation\t" ++ label ++ "\t" ++ message)
+  else fail_with (label ++ " failed for wrong cause: " ++ message)
+reject label cause (Right _) = fail_with (label ++ " was falsely accepted")
+
+covering
+paint_witness : CoverageManifest → Witness → Image → Pixel → IO ()
+paint_witness manifest witness image pixel = do
+  _ ← for_indices_result (cast witness.rows) witness.top (\y ⇒
+    for_indices_result (cast witness.columns) witness.left (\x ⇒ do
+      accepted ← put_pixel image (x + manifest.column_translation) (y + manifest.row_translation) pixel
+      pure (if accepted then Right () else Left "mutation outside admitted output")))
+    >>= require_right
+  pure ()
+
+covering
+damage : CoverageManifest → Image → Image → Text → Text → Witness → Text → Pixel → Bool → IO ()
+damage manifest original reference candidate_path map_path witness label pixel change_map = do
+  candidate ← read_ppm candidate_path >>= require_right
+  identities ← read_ppm map_path >>= require_right
+  paint_witness manifest witness (if change_map then identities else candidate) pixel
+  result ← verify_coverage manifest original reference candidate identities
+  reject label (if change_map then if pixel.red ≟ 0 then "COVERAGE_LOSS:" else "SOURCE_MAP_IDENTITY:"
+                            else "LOCAL_INFORMATION:") result
+
+covering
+mutate_partial_label : CoverageManifest → Image → Image → Text → Text → ContrastProbe → IO ()
+mutate_partial_label manifest original reference candidate_path map_path probe = do
+  candidate ← read_ppm candidate_path >>= require_right
+  identities ← read_ppm map_path >>= require_right
+  Just background ← pixel_at candidate (probe.background_x + manifest.column_translation)
+                                       (probe.background_y + manifest.row_translation)
+    | Nothing ⇒ fail_with "label mutation missing background"
+  _ ← put_pixel candidate (probe.mark_x + manifest.column_translation)
+                          (probe.mark_y + manifest.row_translation) background
+  result ← verify_coverage manifest original reference candidate identities
+  reject "erase-part-of-label" "LOCAL_INFORMATION:" result
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, manifest_path, original_path, reference_path, candidate_path, map_path] ⇒ do
+      Right text ← readFile manifest_path
+        | Left error ⇒ fail_with (show error)
+      manifest ← require_right (parse_manifest text)
+      _ ← verify_input_digest manifest.decoded_sha256 original_path >>= require_right
+      original ← read_ppm original_path >>= require_right
+      reference ← read_ppm reference_path >>= require_right
+      candidate ← read_ppm candidate_path >>= require_right
+      identities ← read_ppm map_path >>= require_right
+      _ ← verify_coverage manifest original reference candidate identities >>= require_right
+      putStrLn "PASS\tpositive baseline before mutations"
+      let electrical = filter required manifest.witnesses
+      Just first ← pure (head' electrical)
+        | Nothing ⇒ fail_with "missing required witness"
+      damage manifest original reference candidate_path map_path first "erase-observed-feature" (RGB 232 232 232) False
+      damage manifest original reference candidate_path map_path first "mask-boundary-crosses-feature" (RGB 0 0 0) True
+      damage manifest original reference candidate_path map_path first "same-shape-wrong-photo-map" (RGB 19 19 19) True
+      -- Fill a fresh same-sized map with an actual different photograph ID,
+      -- rather than changing only metadata or dimensions.
+      _ ← for_indices_result (cast (image_height identities)) 0 (\y ⇒
+        for_indices_result (cast (image_width identities)) 0 (\x ⇒ do
+          _ ← put_pixel identities x y (RGB 0 0 0)
+          _ ← put_pixel candidate x y (RGB 232 232 232)
+          pure (Right ()))) >>= require_right
+      result ← verify_coverage manifest original reference candidate identities
+      reject "all-grey-all-unknown" "COVERAGE_LOSS:" result
+      candidate_known ← read_ppm candidate_path >>= require_right
+      map_known ← read_ppm map_path >>= require_right
+      _ ← for_indices_result (cast (image_height candidate_known)) 0 (\y ⇒
+        for_indices_result (cast (image_width candidate_known)) 0 (\x ⇒ do
+          _ ← put_pixel candidate_known x y (RGB 232 232 232)
+          pure (Right ()))) >>= require_right
+      erased ← verify_coverage manifest original reference candidate_known map_known
+      reject "all-grey-with-legitimate-map" "LOCAL_INFORMATION:" erased
+      let no_observations = unlines (map (\line ⇒
+            if isPrefixOf "witness " line then
+              unwords (map (\word ⇒ if word ≟ "observed" then "ambiguous" else word) (words line))
+              else line) (lines text))
+      case parse_manifest no_observations of
+        Left message ⇒ if isPrefixOf "NONVACUITY:" message
+          then putStrLn "PASS\tmutation\tall-witnesses-unresolved-rejected-at-admission"
+          else fail_with ("unresolved manifest rejected for wrong cause: " ++ message)
+        Right _ ⇒ fail_with "all unresolved manifest accepted"
+      let empty = unlines (filter (\line ⇒ not (isPrefixOf "witness " line || isPrefixOf "probe " line)) (lines text))
+      reject "zero-admitted-witnesses" "NONVACUITY:" (parse_manifest empty)
+      traverse_ (\witness ⇒ case witness.kind of
+        junction_dot ⇒ damage manifest original reference candidate_path map_path witness "remove-junction-dot" (RGB 232 232 232) False
+        _ ⇒ pure ()) electrical
+      Just marking ← pure (find (\witness ⇒ case witness.kind of
+        terminal_mark ⇒ True
+        legible_text ⇒ True
+        _ ⇒ False) electrical)
+        | Nothing ⇒ fail_with "missing marking"
+      Just marking_probe ← pure (find (\probe ⇒ probe.witness_name ≟ marking.name) manifest.probes)
+        | Nothing ⇒ fail_with "missing marking probe"
+      mutate_partial_label manifest original reference candidate_path map_path marking_probe
+      -- Filling the bright gap with either observed contact-bar sample must fail.
+      traverse_ (\witness ⇒ case witness.kind of
+        contact_gap ⇒ do
+          Just probe ← pure (find (\probe ⇒ probe.witness_name ≟ witness.name) manifest.probes)
+            | Nothing ⇒ fail_with "missing gap probe"
+          changed ← read_ppm candidate_path >>= require_right
+          clean_map ← read_ppm map_path >>= require_right
+          Just mark ← pixel_at changed (probe.mark_x + manifest.column_translation)
+                                       (probe.mark_y + manifest.row_translation)
+            | Nothing ⇒ fail_with "missing gap flank"
+          _ ← put_pixel changed (probe.background_x + manifest.column_translation)
+                                 (probe.background_y + manifest.row_translation) mark
+          filled ← verify_coverage manifest original reference changed clean_map
+          reject "fabricated-contact-bridge" "LOCAL_INFORMATION:" filled
+        _ ⇒ pure ()) electrical
+      putStrLn "PASS\tcoverage mutation suite; photographic scope remains bounded"
+    _ ⇒ fail_with "usage: coverage-tests MANIFEST ORIGINAL REFERENCE CANDIDATE MAP"
