@@ -1,5 +1,16 @@
 # Inspectable schematic cleanup in Idriç
 
+Current result: **partial photographic reconstruction**. The registration
+implementation now compiles and executes through the pinned Idriç/Chez path;
+all twelve photographs were processed. Main control and power sheets are
+2448 × 3903 and 2336 × 2364, with matching unenhanced views, exact source maps,
+native sampling atlases, and byte-identical PNG/P6 decoded RGB arrays.
+Every reference-sheet pixel independently replays from original RGB or grey.
+
+See [current acceptance and remaining limits](docs/acceptance-v3.md) and
+[executed receipts](evidence/host-v3/commands.tsv). Reflection/dust and unproven
+joins keep photographic acceptance partial and this PR draft. Images stay private.
+
 Recover readable views of the photographed ReTech control and power schematics,
 while retaining the distinction between observed circuit marks, image
 enhancement, and unresolved joins.
@@ -61,7 +72,7 @@ across missing observations.
 shared circuit features and their visual estimation uncertainty. A fit through
 exactly three guessed points would not independently establish correctness.
 
-## Execution and evidence
+## Historical initial raster execution and evidence
 
 The compiler dependency is the canonical `isomorphisms/Idric` `Idriç` line,
 pinned to `2bce7677f513d711875e978bd6f5ad28b9e54d58`. Its maintained `edric`
@@ -91,7 +102,7 @@ The real-photograph result has its separate
 [`evidence/photo-run.tsv`](evidence/photo-run.tsv) record.
 Passing raster checks do not establish successful optical reconstruction.
 
-## Later, still-draft registration work
+## Historical registration trial and executed continuation
 
 The [registration continuation](docs/registration-v2.md) provides fixed-point
 Idriç source selection across three landmark-supported overlapping pairs,
@@ -100,7 +111,8 @@ reference trials. This is **not seamless stitching of the entire diagram**:
 the 1712–1713, 1713–1718 and 1715–1716 control joins remain unregistered.
 The 1721–1722 power pair lacks independent feature corroboration.
 
-`Registration.idric` and `RegistrationTests.idric` are new source and are
-**not yet compiled or run through the pinned Idriç compiler**. Raster cleanup
-and previous axis-aligned assembly have separate, older execution evidence.
-Neither status constitutes verified electrical continuity.
+`Registration.idric` and `RegistrationTests.idric` now compile and execute through
+the pinned compiler. [The executed continuation](docs/acceptance-v3.md) records
+the current plans, tests, full photograph processing and private sheet dimensions.
+The earlier image trials remain separate historical evidence. Electrical
+continuity and full photographic reconstruction remain unaccepted.

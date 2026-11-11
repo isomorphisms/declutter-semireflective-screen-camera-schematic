@@ -1,0 +1,15 @@
+boundary	status	evidence
+source-compiler	PASS	Idric 2bce7677f513d711875e978bd6f5ad28b9e54d58; edric bootstrap; Chez10.4.1
+raster-focused-runtime	PASS	34 PASS log records including summary; exit0
+registration-focused-runtime	PASS	46 PASS log records including summary; exit0
+registration-cli-negative-controls	PASS	valid0; no-overlap1; singular1
+aperture-negative-controls	PASS	valid0; wrong-shape1; crossed-polygon1; out-of-image1
+landmark-audit	PASS	Exact synthetic fit; coincident points refused; new held-out M2S squared errors2,5; wrong terminal exit1
+reference-source-replay	PASS	9,554,544 control and5,522,304 power pixels; single changed pixel rejected
+all-twelve-photographs-executed	PASS	12 enhancement;24 aperture runs;4 registration;10 assembly runs
+main-png-p6-output-equality	PASS	6 byte-identical decoded RGB pairs
+native-png-p6-output-equality	PASS	4 byte-identical decoded RGB pairs
+geometric-registration	PARTIAL	Two corroborated pair transforms used with grey seam gaps; other joins separated
+full-photographic-reconstruction	PARTIAL	Reflection/dust; faint or clipped marks; mask edges; unproven joins
+electrical-continuity	UNVERIFIED	No connection inferred across a seam or between columns
+public-image-publication	NOT_PERFORMED	Only source, plans, digests and text receipts belong in GitHub

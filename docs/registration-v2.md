@@ -1,5 +1,9 @@
 # Registration continuation — 10 November 2026
 
+Historical trial record. The 11 November [executed continuation](acceptance-v3.md)
+supersedes this page's runtime-availability and uncompiled-source status. Its
+older reference images and SIFT counts remain historical evidence.
+
 **New work is a geometric trial, not a reconstructed circuit.**
 
 The original twelve 1152 × 1536 JPEG photographs were recovered and checked

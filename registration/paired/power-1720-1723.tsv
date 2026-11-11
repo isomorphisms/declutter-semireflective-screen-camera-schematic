@@ -1,7 +1,8 @@
 # All coefficients are in millionths, earlier to later.
-canvas 1017 1442
-earlier 1000001720.ppm 25 260 1000 990
-later 1000001723.ppm 25 300 1000 1000
+canvas 1160 1510
+earlier 1000001720.ppm 0 280 1152 1150
+later 1000001723.ppm 0 300 1152 1100
 similarity 916800 46900 60278600 -364557200
-origin 16 -134
+origin -8 -109
 seam 680
+gap 24

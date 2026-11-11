@@ -1,6 +1,6 @@
 # Program attempt: schematic-cleanup
 
-Status: `PARTIAL` for the full photographic reconstruction; `PASS` for the implemented raster program's compile and focused runtime acceptance.
+Status: `PARTIAL` for full photographic reconstruction; `PASS` for the implemented raster, registration, aperture, landmark-audit and reference-replay programs' compile and focused host execution. See [current acceptance](../../../docs/acceptance-v3.md).
 
 ## Purpose
 
@@ -95,5 +95,29 @@ Smallest plausible language change: recognize Unicode minus in `.idric` mathemat
 Acceptance test for the notation change: the existing `UnicodeMinus.idric` probe must typecheck and execute subtraction with positive, negative, and zero results on the revised compiler; an `.idr` compatibility case must retain its existing meaning. No such compiler change is claimed here.
 
 ## Evidence boundary
+
+## Registration and photographic continuation, 11 November 2026
+
+Type sketch before this continuation's edits: a photograph retains its native
+row-major RGB raster and source identity. A `Similarity` has fixed-point
+coefficients in millionths; admitted points and plans bound every intermediate
+integer before multiplication. Forward/inverse operations return explicit
+errors for unsupported inputs. A `SourceSelection` is either unobserved or one
+photograph with its exact original integer position. Rendering and provenance
+use that same decision, so no averaging or invented pixel is possible.
+
+The plan parser validates resource limits, source regions, transforms, origins,
+and seam intersection. Rectangular exclusions designate photographed HMI
+controls; they do not reconstruct whatever the controls cover. A visible seam
+gap keeps a geometric fit from asserting electrical continuity.
+
+Focused acceptance will include independent coordinate answers, rotated and
+translated non-square RGB fixtures, signed limits, malformed plans, impossible
+overlaps, grey unknown pixels, and exact RGB selection. Real photographic
+quality and PNG/P6 equality remain separate acceptance rows.
+
+The pinned compiler and Chez execution path remain unchanged. No first-party
+C or Python image processor is introduced. Unicode subtraction retains the
+documented pinned-compiler exception above.
 
 The implemented raster program has exact-compiler compilation and focused host-execution evidence. Its dependent types associate positions with raster dimensions and record coordinate admission. Bulk row copies and integral sums use checked extents and implementation arithmetic, not a whole-memory formal proof. Reflection separation, character identity, recovered electrical connectivity, seamless registration, and physical/user acceptance are not proved. Full photographic reconstruction remains `PARTIAL`, independently of the passing implementation checks. Publication and full-photo outputs have separate receipts owned by the surrounding task.

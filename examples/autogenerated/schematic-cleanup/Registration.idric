@@ -1,6 +1,7 @@
 module Registration
 
 import Data.List
+import Data.Maybe
 import Data.Text
 import SchematicRaster
 import System
@@ -15,6 +16,7 @@ record PixelPoint where
   column : Int
   row : Int
 
+public export
 record SourceRegion where
   constructor FromPhotograph
   name : Text
@@ -31,11 +33,13 @@ record Similarity where
   offset_column : Int
   offset_row : Int
 
+public export
 record OutputFrame where
   constructor Canvas
   columns : Int
   rows : Int
 
+public export
 record PairPlan where
   constructor RegisterPair
   frame : OutputFrame
@@ -44,6 +48,7 @@ record PairPlan where
   transformation : Similarity
   origin : PixelPoint
   seam_row : Int
+  seam_gap : Int
 
 -- Similarity coefficients and translations are in millionths.
 -- Int64 arithmetic stays bounded by image, coefficient and origin admission.
@@ -53,25 +58,26 @@ coefficient_unit = 1000000
 export
 valid_similarity : Similarity → Bool
 valid_similarity transformation =
-  let squared_scale = transformation.a × transformation.a +
-                      transformation.b × transformation.b in
-  abs transformation.a <= 2000000 &&
-  abs transformation.b <= 2000000 &&
-  abs transformation.offset_column <= 2000000000 &&
-  abs transformation.offset_row <= 2000000000 &&
-  squared_scale >= 250000000000 &&
-  squared_scale <= 2560000000000
+  -- Compare before multiplying; abs minBound and a premature square overflow.
+  if transformation.a < -2000000 || transformation.a > 2000000 ||
+     transformation.b < -2000000 || transformation.b > 2000000 ||
+     transformation.offset_column < -2000000000 ||
+     transformation.offset_column > 2000000000 ||
+     transformation.offset_row < -2000000000 ||
+     transformation.offset_row > 2000000000
+     then False
+     else let squared_scale = transformation.a × transformation.a +
+                              transformation.b × transformation.b in
+          squared_scale >= 250000000000 && squared_scale <= 2560000000000
 
-export
 rounded_ratio : Int → Int → Int
 rounded_ratio numerator denominator =
   if numerator < 0
      then - ((-numerator + denominator `div` 2) `div` denominator)
      else (numerator + denominator `div` 2) `div` denominator
 
-export
-forward_point : Similarity → PixelPoint → PixelPoint
-forward_point transformation point =
+forward_admitted : Similarity → PixelPoint → PixelPoint
+forward_admitted transformation point =
   PointAt
     (rounded_ratio (transformation.a × point.column -
                     transformation.b × point.row +
@@ -82,9 +88,8 @@ forward_point transformation point =
 
 -- The first photograph is mapped into the second photograph's coordinate
 -- space. Inverting for each output pixel avoids forward-mapping holes.
-export
-inverse_point : Similarity → PixelPoint → PixelPoint
-inverse_point transformation point =
+inverse_admitted : Similarity → PixelPoint → PixelPoint
+inverse_admitted transformation point =
   let column_delta = point.column × coefficient_unit -
                      transformation.offset_column in
   let row_delta = point.row × coefficient_unit -
@@ -96,6 +101,27 @@ inverse_point transformation point =
                     transformation.b × row_delta) denominator)
     (rounded_ratio (transformation.a × row_delta -
                     transformation.b × column_delta) denominator)
+
+valid_point : PixelPoint → Bool
+valid_point point =
+  point.column >= -65536 && point.column <= 65536 &&
+  point.row >= -65536 && point.row <= 65536
+
+-- With admitted coefficients, offsets and points, the largest inverse
+-- numerator is below 2.71e17, inside the signed 64-bit Chez host Int.
+export
+forward_point : Similarity → PixelPoint → Either Text PixelPoint
+forward_point transformation point =
+  if valid_similarity transformation && valid_point point
+     then Right (forward_admitted transformation point)
+     else Left "unsupported transformation or coordinate bounds"
+
+export
+inverse_point : Similarity → PixelPoint → Either Text PixelPoint
+inverse_point transformation point =
+  if valid_similarity transformation && valid_point point
+     then Right (inverse_admitted transformation point)
+     else Left "unsupported transformation or coordinate bounds"
 
 parse_integer : Text → Either Text Int
 parse_integer value =
@@ -111,9 +137,10 @@ parse_canvas line = case words line of
   ["canvas", width, height] ⇒ do
     columns ← parse_integer width
     rows ← parse_integer height
-    if columns > 0 && rows > 0
+    if columns > 0 && rows > 0 && columns <= 32768 && rows <= 32768 &&
+       columns × rows <= 40000000
        then Right (Canvas columns rows)
-       else Left "canvas dimensions must be positive"
+       else Left "canvas dimensions exceed admitted shape or resource limits"
   _ ⇒ Left "expected canvas WIDTH HEIGHT"
 
 source_name_allowed : Text → Bool
@@ -132,7 +159,8 @@ parse_region expected line = case words line of
          y ← parse_integer top
          columns ← parse_integer width
          rows ← parse_integer height
-         if x >= 0 && y >= 0 && columns > 0 && rows > 0
+         if x >= 0 && y >= 0 && columns > 0 && rows > 0 &&
+            x <= 32768 && y <= 32768 && columns <= 32768 && rows <= 32768
             then Right (FromPhotograph name x y columns rows)
             else Left "source rectangle requires nonnegative origin and positive extent"
   _ ⇒ Left ("expected " ++ expected ++ " BASENAME LEFT TOP WIDTH HEIGHT")
@@ -166,26 +194,39 @@ parse_seam line = case words line of
   ["seam", row] ⇒ parse_integer row
   _ ⇒ Left "expected seam ROW"
 
+parse_gap : Text → Either Text Int
+parse_gap line = case words line of
+  ["gap", extent] ⇒ do
+    pixels ← parse_integer extent
+    if pixels >= 0 && pixels <= 256
+       then Right pixels
+       else Left "seam gap must be between zero and 256 pixels"
+  _ ⇒ Left "expected gap PIXELS"
+
 active_line : Text → Bool
 active_line line = case unpack (trim line) of
   [] ⇒ False
   '#' :: _ ⇒ False
   _ ⇒ True
 
+export
 parse_plan : Text → Either Text PairPlan
 parse_plan content =
   case filter active_line (lines content) of
-    [canvas_line, earlier_line, later_line, similarity_line, origin_line, seam_line] ⇒ do
+    [canvas_line, earlier_line, later_line, similarity_line, origin_line, seam_line, gap_line] ⇒ do
       frame ← parse_canvas canvas_line
       earlier ← parse_region "earlier" earlier_line
       later ← parse_region "later" later_line
       transformation ← parse_similarity similarity_line
       origin ← parse_origin origin_line
       seam ← parse_seam seam_line
+      gap ← parse_gap gap_line
       if earlier.name ≟ later.name
          then Left "two photographs must have distinct source identities"
-         else Right (RegisterPair frame earlier later transformation origin seam)
-    _ ⇒ Left "plan requires exactly six directives: canvas, earlier, later, similarity, origin, seam"
+         else if seam <= origin.row || seam >= origin.row + frame.rows
+           then Left "seam must lie inside the output frame"
+           else Right (RegisterPair frame earlier later transformation origin seam gap)
+    _ ⇒ Left "plan requires exactly seven directives: canvas, earlier, later, similarity, origin, seam, gap"
 
 region_fits : SourceRegion → Image → Bool
 region_fits region image =
@@ -202,40 +243,119 @@ inside_region region point =
   point.column - region.left < region.columns &&
   point.row - region.top < region.rows
 
-sample_region : SourceRegion → Image → PixelPoint → IO (Maybe Pixel)
-sample_region region photograph point =
-  if inside_region region point
-     then pixel_at photograph point.column point.row
-     else pure Nothing
+public export
+choice source_selection one_of
+  unobserved
+  from_earlier PixelPoint
+  from_later PixelPoint
+
+plan_geometry_admitted : PairPlan → Bool
+plan_geometry_admitted plan =
+  plan.frame.columns > 0 && plan.frame.rows > 0 &&
+  plan.frame.columns <= 32768 && plan.frame.rows <= 32768 &&
+  plan.frame.columns × plan.frame.rows <= 40000000 &&
+  plan.origin.column >= -32768 && plan.origin.column <= 32768 &&
+  plan.origin.row >= -32768 && plan.origin.row <= 32768 &&
+  valid_similarity plan.transformation &&
+  plan.seam_row > plan.origin.row &&
+  plan.seam_row < plan.origin.row + plan.frame.rows &&
+  plan.seam_gap >= 0 && plan.seam_gap <= 256
+
+-- Source identity and coordinate are decided once, above byte access.
+export
+selection_at : PairPlan → PixelPoint → source_selection
+selection_at plan output =
+  if not (plan_geometry_admitted plan) ||
+     output.column < 0 || output.row < 0 ||
+     output.column >= plan.frame.columns || output.row >= plan.frame.rows
+     then unobserved
+     else
+       let anchor = PointAt (output.column + plan.origin.column)
+                            (output.row + plan.origin.row) in
+       let earlier_point = inverse_admitted plan.transformation anchor in
+       let earlier_visible = inside_region plan.earlier earlier_point in
+       let later_visible = inside_region plan.later anchor in
+       if plan.seam_gap > 0 && anchor.row >= plan.seam_row - plan.seam_gap `div` 2 &&
+          anchor.row < plan.seam_row + (plan.seam_gap + 1) `div` 2
+          then unobserved
+          else if anchor.row < plan.seam_row
+            then if earlier_visible then from_earlier earlier_point
+                 else if later_visible then from_later anchor else unobserved
+            else if later_visible then from_later anchor
+                 else if earlier_visible then from_earlier earlier_point else unobserved
+
+-- A geometric overlap must actually reach the proposed seam. This cannot
+-- verify that two photographed conductors have the same electrical identity.
+overlap_at_seam : PairPlan → Bool
+overlap_at_seam plan = any (\column ⇒
+  let anchor = PointAt (column + plan.origin.column) plan.seam_row in
+  inside_region plan.later anchor &&
+  inside_region plan.earlier (inverse_admitted plan.transformation anchor))
+  [0 .. plan.frame.columns - 1]
 
 -- A single source wins at every output pixel. No averaging of unmatched
 -- circuits and no hypothetical continuity across a section boundary.
-select_sample : PairPlan → Image → Image → PixelPoint → IO (Maybe Pixel)
-select_sample plan first second output = do
-  let anchor = PointAt (output.column + plan.origin.column)
-                       (output.row + plan.origin.row)
-  let earlier_point = inverse_point plan.transformation anchor
-  first_sample ← sample_region plan.earlier first earlier_point
-  second_sample ← sample_region plan.later second anchor
-  if anchor.row < plan.seam_row
-     then case first_sample of
-       Just observed ⇒ pure (Just observed)
-       Nothing ⇒ pure second_sample
-     else case second_sample of
-       Just observed ⇒ pure (Just observed)
-       Nothing ⇒ pure first_sample
+select_sample : Image → Image → source_selection → IO (Maybe Pixel)
+select_sample first second selection =
+  case selection of
+    unobserved ⇒ pure Nothing
+    from_earlier point ⇒ pixel_at first point.column point.row
+    from_later point ⇒ pixel_at second point.column point.row
+
+observation_id : Maybe (Image, Image) → source_selection → IO Pixel
+observation_id masks unobserved = pure (RGB 0 0 0)
+observation_id Nothing (from_earlier _) = pure (RGB 1 1 1)
+observation_id Nothing (from_later _) = pure (RGB 2 2 2)
+observation_id (Just (earlier_mask, later_mask)) (from_earlier point) = do
+  sample ← pixel_at earlier_mask point.column point.row
+  pure (fromMaybe (RGB 0 0 0) sample)
+observation_id (Just (earlier_mask, later_mask)) (from_later point) = do
+  sample ← pixel_at later_mask point.column point.row
+  pure (fromMaybe (RGB 0 0 0) sample)
+
+observed : Pixel → Bool
+observed identity = identity.red > 0 && identity.red < 232
+
+visible_selection : PairPlan → Maybe (Image, Image) → PixelPoint → IO source_selection
+visible_selection plan masks output = do
+  let preferred = selection_at plan output
+  case preferred of
+    unobserved ⇒ pure unobserved
+    _ ⇒ do
+      identity ← observation_id masks preferred
+      if observed identity then pure preferred else do
+        let anchor = PointAt (output.column + plan.origin.column)
+                             (output.row + plan.origin.row)
+        let earlier_point = inverse_admitted plan.transformation anchor
+        let alternative = case preferred of
+              from_earlier _ ⇒ if inside_region plan.later anchor
+                                 then from_later anchor else unobserved
+              _ ⇒ if inside_region plan.earlier earlier_point
+                     then from_earlier earlier_point else unobserved
+        alternate_id ← observation_id masks alternative
+        pure (if observed alternate_id then alternative else unobserved)
 
 covering
-render_plan : PairPlan → Image → Image → Text → IO (Either Text ())
-render_plan plan first second destination = do
-  if not (region_fits plan.earlier first && region_fits plan.later second)
+render_observations : PairPlan → Image → Image → Maybe (Image, Image) → Text → IO (Either Text ())
+render_observations plan first second masks destination = do
+  if not (plan_geometry_admitted plan)
+     then pure (Left "unsupported plan geometry")
+     else if not (region_fits plan.earlier first && region_fits plan.later second)
      then pure (Left "source rectangle lies outside its photographed image")
+     else if not (overlap_at_seam plan)
+       then pure (Left "proposed seam has no geometrically shared source observation")
      else do
        Right output ← new_image plan.frame.columns plan.frame.rows
          | Left message ⇒ pure (Left message)
+       Right source_map ← new_image plan.frame.columns plan.frame.rows
+         | Left message ⇒ pure (Left message)
        Right () ← for_indices_result (cast plan.frame.rows) 0 $ \row ⇒
          for_indices_result (cast plan.frame.columns) 0 $ \column ⇒ do
-           sample ← select_sample plan first second (PointAt column row)
+           let point = PointAt column row
+           selection ← visible_selection plan masks point
+           identity ← observation_id masks selection
+           mapped ← put_pixel source_map column row identity
+           sample ← select_sample first second selection
            case sample of
              Nothing ⇒ do
                admitted ← put_pixel output column row (RGB 232 232 232)
@@ -246,7 +366,26 @@ render_plan plan first second destination = do
                if admitted then pure (Right ())
                            else pure (Left "internal output coordinate was rejected")
          | Left message ⇒ pure (Left message)
-       write_ppm destination output
+       Right () ← write_ppm destination output
+         | Left message ⇒ pure (Left message)
+       write_ppm (destination ++ ".sources.pnm") source_map
+
+covering
+export
+render_plan : PairPlan → Image → Image → Text → IO (Either Text ())
+render_plan plan first second destination =
+  render_observations plan first second Nothing destination
+
+covering
+export
+render_masked_plan : PairPlan → Image → Image → Image → Image → Text → IO (Either Text ())
+render_masked_plan plan first second earlier_mask later_mask destination =
+  if image_width first /= image_width earlier_mask ||
+     image_height first /= image_height earlier_mask ||
+     image_width second /= image_width later_mask ||
+     image_height second /= image_height later_mask
+     then pure (Left "source-selection map shape differs from its photograph")
+     else render_observations plan first second (Just (earlier_mask, later_mask)) destination
 
 provenance : PairPlan → Text
 provenance plan =
@@ -260,6 +399,8 @@ provenance plan =
   "\norigin_column\t" ++ show plan.origin.column ++
   "\norigin_row\t" ++ show plan.origin.row ++
   "\nseam_anchor_row\t" ++ show plan.seam_row ++
+  "\nseam_gap_pixels\t" ++ show plan.seam_gap ++
+  "\nsource_map\t0=unobserved; otherwise original photograph ID from aperture map" ++
   "\nresampling\tnearest source pixel; no bilinear interpolation" ++
   "\noverlap_policy\tone observed source per pixel, first above seam, second below" ++
   "\nunobserved_pixels\tgrey RGB(232,232,232)" ++
@@ -294,7 +435,15 @@ main = do
              | Left message ⇒ do
                  putStrLn ("FAIL: later photo: " ++ message)
                  exitFailure
-           Right () ← render_plan plan first second destination
+           Right earlier_mask ← read_ppm (first_path ++ ".sources.pnm")
+             | Left message ⇒ do
+                 putStrLn ("FAIL: earlier source map: " ++ message)
+                 exitFailure
+           Right later_mask ← read_ppm (second_path ++ ".sources.pnm")
+             | Left message ⇒ do
+                 putStrLn ("FAIL: later source map: " ++ message)
+                 exitFailure
+           Right () ← render_masked_plan plan first second earlier_mask later_mask destination
              | Left message ⇒ do
                  putStrLn ("FAIL: " ++ message)
                  exitFailure
