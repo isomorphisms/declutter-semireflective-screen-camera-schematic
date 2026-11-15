@@ -7,6 +7,14 @@ all twelve photographs were processed. Main control and power sheets are
 native sampling atlases, and byte-identical PNG/P6 decoded RGB arrays.
 Every reference-sheet pixel independently replays from original RGB or grey.
 
+The [photograph review interface](docs/photo-review-v1.md) now turns source-bound
+uncertainties into targeted capture requests. It shows original regions, gives
+angle/overlap guidance, and saves deferred requests and newly attached photos
+in a private offline page. New images remain pending verification. Processing
+damage requests software repair; it does not ask the user to retake an already
+adequate original. This is a bounded witness/region interface, not automatic
+whole-sheet confidence detection or completed electrical reconstruction.
+
 The [independent fidelity slice](docs/independent-verification-v1.md) now executes:
 known original conductor/mark witnesses pass and deliberate erasure fails.
 The [companion-output collision repair](docs/path-admission-v1.md) now passes

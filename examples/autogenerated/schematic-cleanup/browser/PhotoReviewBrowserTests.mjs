@@ -1,0 +1,76 @@
+// Browser-API acceptance boundary; Idriç owns report generation and findings.
+import assert from 'node:assert/strict';
+import { readFile, mkdir } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+
+const [report, imageFixture, outputDirectory] = process.argv.slice(2);
+assert(report && imageFixture && outputDirectory, 'report, BMP fixture and output directory required');
+const runtimeModules = process.env.PHOTO_REVIEW_NODE_MODULES || process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES;
+const require = createRequire(import.meta.url);
+const { chromium } = runtimeModules ? require(path.join(runtimeModules, 'playwright')) : require('playwright');
+await mkdir(outputDirectory, {recursive: true});
+const browser = await chromium.launch({...(process.env.CHROMIUM ? {executablePath: process.env.CHROMIUM} : {}), headless: true, args: ['--no-sandbox']});
+const failures = [];
+const externalRequests = [];
+const page = await browser.newPage({viewport: {width: 390, height: 844}});
+page.on('pageerror', error => failures.push(error.message));
+page.on('request', request => { if (/^https?:/.test(request.url())) externalRequests.push(request.url()); });
+try {
+  await page.goto(pathToFileURL(report).href);
+  await page.locator('.original-detail').last().waitFor();
+  assert(await page.locator('.original-detail').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)));
+  console.log('PASS\toriginal embedded images decode in Chromium');
+  const repair = page.locator('.region[data-cause="processing-loss"]');
+  assert(await repair.count() > 0);
+  assert.equal(await repair.locator('input,select').count(), 0);
+  assert.match(await repair.locator('.state').innerText(), /Processing repair/);
+  console.log('PASS\tprocessing loss exposes repair without a retake control');
+  for (const width of [320, 390, 760]) {
+    await page.setViewportSize({width, height: 844});
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `overflow at ${width}`);
+  }
+  console.log('PASS\t320, 390 and 760 pixel layouts fit');
+  await page.setViewportSize({width: 390, height: 844});
+  const request = page.locator('.region[data-cause="glare"]').first();
+  await request.locator('select').selectOption('later');
+  assert.match(await request.locator('.state').innerText(), /deferred/);
+  console.log('PASS\tdeferral preserves unresolved evidence');
+  const hostileName = '<img src=x onerror=alert(1)>.png';
+  await request.locator('input[type=file]').setInputFiles({name: hostileName, mimeType: imageFixture.endsWith('.png') ? 'image/png' : 'image/bmp', buffer: await readFile(imageFixture)});
+  await page.waitForFunction(() => !document.querySelector('#save-review').disabled);
+  assert.equal(await request.locator('.new-photo').count(), 1);
+  assert.match(await request.locator('.state').innerText(), /verification pending/);
+  assert.match(await request.locator('.new-photo figcaption').innerText(), /<img src=x onerror=alert\(1\)>/);
+  assert.equal(await request.locator('.new-photo img[onerror]').count(), 0);
+  console.log('PASS\tnew photo remains pending and its filename is inert text');
+  await request.locator('select').selectOption('unavailable');
+  assert.match(await request.locator('.state').innerText(), /verification pending.*cannot photograph/);
+  await page.screenshot({path: path.join(outputDirectory, 'photo-review-mobile.png'), fullPage: true});
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#save-review').click();
+  const download = await downloadPromise;
+  const saved = path.join(outputDirectory, 'saved-review.html');
+  await download.saveAs(saved);
+  const reopened = await browser.newPage({viewport: {width: 390, height: 844}});
+  reopened.on('pageerror', error => failures.push(error.message));
+  await reopened.goto(pathToFileURL(saved).href);
+  const restored = reopened.locator('.region[data-cause="glare"]').first();
+  assert.equal(await restored.locator('select').inputValue(), 'unavailable');
+  assert.equal(await restored.locator('.new-photo').count(), 1);
+  assert(await restored.locator('.new-photo img').evaluate(image => image.complete && image.naturalWidth > 0));
+  assert.match(await restored.locator('.state').innerText(), /verification pending.*cannot photograph/);
+  console.log('PASS\tsaved copy reopens with disposition and original attached photograph');
+  await restored.locator('input[type=file]').setInputFiles({name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('not an image')});
+  await reopened.waitForFunction(() => !document.querySelector('#save-review').disabled);
+  assert.equal(await restored.locator('.new-photo').count(), 1);
+  assert.match(await restored.locator('.upload-status').innerText(), /could not be displayed/);
+  assert.match(await restored.locator('.state').innerText(), /verification pending/);
+  console.log('PASS\tundecodable upload does not count as evidence or clear the request');
+  assert.equal(await reopened.getByRole('button', {name: /resolved|verified|approve/i}).count(), 0);
+  assert.deepEqual(externalRequests, []);
+  assert.deepEqual(failures, []);
+  console.log('PASS\tno client approval control, external requests or runtime errors');
+  await reopened.close();
+} finally { await browser.close(); }

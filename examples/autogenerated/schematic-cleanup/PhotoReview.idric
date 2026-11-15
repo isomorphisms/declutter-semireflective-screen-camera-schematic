@@ -1,0 +1,239 @@
+module PhotoReview
+
+import Data.Buffer
+import Data.List
+import Data.Text
+import FreshFiles
+import PhotoRequests
+import RunPaths
+import SchematicRaster
+import System
+import System.File
+import VerifyCoverage
+
+-- Browser image-format boundary only: 24-bit, uncompressed, bottom-up BMP.
+-- Detail views copy exact RGB. A separate sampled overview locates the region.
+write_little_endian : Buffer → Int → Int → IO ()
+write_little_endian bytes offset value = do
+  setByte bytes offset (value `mod` 256)
+  setByte bytes (offset + 1) ((value `div` 256) `mod` 256)
+  setByte bytes (offset + 2) ((value `div` 65536) `mod` 256)
+  setByte bytes (offset + 3) ((value `div` 16777216) `mod` 256)
+
+export
+bitmap_from : Image → Int → Int → Int → Int → Int → IO (Either Text (Buffer, Int))
+bitmap_from image left top width height step =
+  if left < 0 || top < 0 || left > 32768 || top > 32768 ||
+     width <= 0 || height <= 0 || step <= 0 || step > 32768 ||
+     left + width > image_width image || top + height > image_height image ||
+     width > 32768 || height > 32768
+     then pure (Left "REVIEW_RECTANGLE: region is outside its original photograph") else do
+    let columns = (width + step - 1) `div` step
+    let rows = (height + step - 1) `div` step
+    let stride = ((columns × 3 + 3) `div` 4) × 4
+    let header_size = 54
+    let extent = header_size + stride × rows
+    if columns × rows > 262144 then pure (Left "REVIEW_RESOURCE: embedded view exceeds 512 squared pixels") else do
+      Just bytes ← newBuffer extent
+        | Nothing ⇒ pure (Left "REVIEW_RESOURCE: cannot allocate browser image")
+      for_indices (cast extent) 0 (\offset ⇒ setByte bytes offset 0)
+      setByte bytes 0 66
+      setByte bytes 1 77
+      write_little_endian bytes 2 extent
+      write_little_endian bytes 10 header_size
+      write_little_endian bytes 14 40
+      write_little_endian bytes 18 columns
+      write_little_endian bytes 22 rows
+      setByte bytes 26 1
+      setByte bytes 28 24
+      write_little_endian bytes 34 (stride × rows)
+      Right () ← for_indices_result (cast rows) 0 $ \row ⇒
+        for_indices_result (cast columns) 0 $ \column ⇒ do
+          Just pixel ← pixel_at image (left + column × step)
+            (top + (rows - 1 - row) × step)
+            | Nothing ⇒ pure (Left "REVIEW_RECTANGLE: missing original sample")
+          let offset = header_size + row × stride + column × 3
+          setBits8 bytes offset pixel.blue
+          setBits8 bytes (offset + 1) pixel.green
+          setBits8 bytes (offset + 2) pixel.red
+          pure (Right ())
+        | Left message ⇒ pure (Left message)
+      pure (Right (bytes, extent))
+
+base64_character : Int → Char
+base64_character value = chr (if value < 26 then ord 'A' + value
+  else if value < 52 then ord 'a' + value - 26
+  else if value < 62 then ord '0' + value - 52
+  else if value ≟ 62 then ord '+' else ord '/')
+
+base64_groups : Number → Buffer → Int → Int → List Char → IO Text
+base64_groups Z bytes extent offset reversed = pure (pack (reverse reversed))
+base64_groups (S remaining) bytes extent offset reversed = do
+  first ← getByte bytes offset
+  second ← if offset + 1 < extent then getByte bytes (offset + 1) else pure 0
+  third ← if offset + 2 < extent then getByte bytes (offset + 2) else pure 0
+  let a = base64_character (first `div` 4)
+  let b = base64_character ((first `mod` 4) × 16 + second `div` 16)
+  let c = if offset + 1 < extent then base64_character ((second `mod` 16) × 4 + third `div` 64) else '='
+  let d = if offset + 2 < extent then base64_character (third `mod` 64) else '='
+  base64_groups remaining bytes extent (offset + 3) (d :: c :: b :: a :: reversed)
+
+bitmap_uri : Image → Int → Int → Int → Int → Int → IO (Either Text Text)
+bitmap_uri image left top width height step = do
+  Right (bytes, extent) ← bitmap_from image left top width height step
+    | Left message ⇒ pure (Left message)
+  encoded ← base64_groups (cast ((extent + 2) `div` 3)) bytes extent 0 []
+  pure (Right ("data:image/bmp;base64," ++ encoded))
+
+export
+card_markup : PhotoRegion → Int → Int → Text → Text → Text
+card_markup region source_width source_height overview detail =
+  let identifier = escape_html region.identity
+      photo_needed = needs_photograph region.reason
+      initial_state = if photo_needed then "Another view needed" else
+        case region.reason of
+          processing_loss ⇒ "Processing repair needed"
+          preserved_appearance ⇒ "Checked local appearance only"
+          _ ⇒ "Unchecked"
+  in fastConcat
+    ["<article class=\"region\" id=\"", identifier, "\" data-source=\"", escape_html region.source_sha256,
+     "\" data-cause=\"", reason_name region.reason, "\" data-disposition=\"now\">",
+     "<h2>", escape_html (reason_label region.reason), "</h2><p class=\"state\" aria-live=\"polite\">", initial_state,
+     "</p><p>", escape_html region.evidence, "</p><p class=\"coordinates\">", escape_html region.source_name,
+     " · original x=", show region.left, " y=", show region.top, " · ", show region.columns,
+     " × ", show region.rows, " pixels</p>",
+     "<details><summary>Locate on original photograph</summary><svg class=\"overview\" viewBox=\"0 0 ",
+     show source_width, " ", show source_height, "\" role=\"img\" aria-label=\"Original photograph with the review region outlined\">",
+     "<image width=\"", show source_width, "\" height=\"", show source_height, "\" href=\"", overview,
+     "\"/><rect x=\"", show region.left, "\" y=\"", show region.top, "\" width=\"", show region.columns,
+     "\" height=\"", show region.rows, "\" fill=\"none\" stroke=\"#ffd178\" stroke-width=\"6\" stroke-dasharray=\"14 8\"/>",
+     "</svg><p class=\"secondary\">Sampled location overview. The detail below retains original pixels.</p></details>",
+     "<figure><img class=\"original-detail\" src=\"", detail,
+     "\" alt=\"Unenhanced original region\"/><figcaption>Original detail · no enhancement or generated content</figcaption></figure>",
+     "<p class=\"guidance\">", escape_html (guidance_for region.reason), "</p>",
+     if photo_needed then fastConcat
+       ["<label>Capture timing<select class=\"disposition\"><option value=\"now\">Ready to photograph</option>",
+        "<option value=\"later\">Later</option><option value=\"unavailable\">Cannot photograph</option></select></label>",
+        "<label class=\"capture\">Add photographs<input class=\"photos\" type=\"file\" accept=\"image/*\" multiple capture=\"environment\"/></label>",
+        "<div class=\"new-photos\"></div><p class=\"upload-status secondary\" aria-live=\"polite\"></p>"] else "",
+     "</article>\n"]
+
+covering
+export
+render_region : Text → PhotoRegion → IO (Either Text Text)
+render_region directory region = do
+  let path = directory ++ "/" ++ region.source_name
+  Right () ← verify_input_digest region.source_sha256 path
+    | Left message ⇒ pure (Left message)
+  Right original ← read_ppm path
+    | Left message ⇒ pure (Left message)
+  Right detail ← bitmap_uri original region.left region.top region.columns region.rows 1
+    | Left message ⇒ pure (Left message)
+  let width = image_width original
+  let height = image_height original
+  let sample_step = max 1 ((max width height + 383) `div` 384)
+  Right overview ← bitmap_uri original 0 0 width height sample_step
+    | Left message ⇒ pure (Left message)
+  pure (Right (card_markup region width height overview detail))
+
+insert_cards : Text → List Text → Either Text Text
+insert_cards template cards =
+  if length (filter (≟ "{{REGION_CARDS}}") (lines template)) /= 1
+     then Left "REVIEW_TEMPLATE: require exactly one REGION_CARDS line"
+     else Right (unlines (map (\line ⇒ if line ≟ "{{REGION_CARDS}}" then fastConcat cards else line) (lines template)))
+
+covering
+export
+render_review : Text → Text → List PhotoRegion → Text → IO (Either Text ())
+render_review template_path directory regions output = do
+  Right () ← admit_run (template_path :: map (\region ⇒ directory ++ "/" ++ region.source_name) regions) [output]
+    | Left message ⇒ pure (Left message)
+  Right template ← readFile template_path
+    | Left error ⇒ pure (Left (show error))
+  Right cards ← render_all regions
+    | Left message ⇒ pure (Left message)
+  Right document ← pure (insert_cards template cards)
+    | Left message ⇒ pure (Left message)
+  write_new_text output document
+  where
+    render_all : List PhotoRegion → IO (Either Text (List Text))
+    render_all [] = pure (Right [])
+    render_all (region :: rest) = do
+      Right card ← render_region directory region
+        | Left message ⇒ pure (Left message)
+      Right cards ← render_all rest
+        | Left message ⇒ pure (Left message)
+      pure (Right (card :: cards))
+
+-- This adapter calls the existing verifier, keeping successful appearance,
+-- actual processing damage and unresolved photographic witnesses distinct.
+covering
+export
+coverage_regions : CoverageManifest → Image → Image → Image → Image → Text → IO (Either Text (List PhotoRegion))
+coverage_regions manifest original reference candidate identities source = collect manifest.witnesses
+  where
+    collect : List Witness → IO (Either Text (List PhotoRegion))
+    collect [] = pure (Right [])
+    collect (witness :: rest) = do
+      Right remaining ← collect rest
+        | Left message ⇒ pure (Left message)
+      case witness.kind of
+        contamination ⇒ pure (Right remaining)
+        _ ⇒ do
+          result ← verify_witness manifest original reference candidate identities witness
+          let observation = case witness.state of
+                ambiguous ⇒ Right disagreeing_views
+                unobserved ⇒ Right missing_coverage
+                observed ⇒ case result of
+                  Right () ⇒ Right preserved_appearance
+                  Left message ⇒ if isPrefixOf "LOCAL_INFORMATION:" message || isPrefixOf "COVERAGE_LOSS:" message
+                    then Right processing_loss else Left message
+          case observation of
+            Left message ⇒ pure (Left message)
+            Right reason ⇒ pure (Right (RegionForReview witness.name source manifest.decoded_sha256
+              witness.left witness.top witness.columns witness.rows reason witness.evidence :: remaining))
+
+covering
+fail_with : Text → IO ()
+fail_with message = do
+  putStrLn ("FAIL\t" ++ message)
+  exitFailure
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, "regions", manifest_path, directory, template_path, output] ⇒ do
+      Right () ← admit_run [manifest_path, template_path] [output]
+        | Left message ⇒ fail_with message
+      Right text ← readFile manifest_path
+        | Left error ⇒ fail_with (show error)
+      Right regions ← pure (parse_regions text)
+        | Left message ⇒ fail_with message
+      Right () ← render_review template_path directory regions output
+        | Left message ⇒ fail_with message
+      putStrLn "PASS\tprivate photo review generated; unresolved evidence remains unresolved"
+    [_, "coverage", manifest_path, directory, source, reference_path, candidate_path, map_path, template_path, output] ⇒ do
+      let original_path = directory ++ "/" ++ source
+      Right () ← admit_run [manifest_path, original_path, reference_path, candidate_path, map_path, template_path] [output]
+        | Left message ⇒ fail_with message
+      Right text ← readFile manifest_path
+        | Left error ⇒ fail_with (show error)
+      manifest ← require_right (parse_manifest text)
+      -- Re-admit all generated region identities through the same strict input boundary.
+      _ ← verify_input_digest manifest.decoded_sha256 original_path >>= require_right
+      original ← read_ppm original_path >>= require_right
+      reference ← read_ppm reference_path >>= require_right
+      candidate ← read_ppm candidate_path >>= require_right
+      identities ← read_ppm map_path >>= require_right
+      if image_width original /= manifest.source_width || image_height original /= manifest.source_height ||
+         any (\image ⇒ image_width image /= manifest.output_width || image_height image /= manifest.output_height)
+             [reference, candidate, identities]
+         then fail_with "FRAME_SHAPE: coverage inputs differ from the frozen manifest" else do
+        regions ← coverage_regions manifest original reference candidate identities source >>= require_right
+        admitted ← require_right (parse_regions ("version\tphoto-requests-v1\n" ++ unlines (map region_row regions)))
+        Right () ← render_review template_path directory admitted output
+          | Left message ⇒ fail_with message
+        putStrLn "PASS\tcoverage findings rendered; this is not whole-sheet or electrical acceptance"
+    _ ⇒ fail_with "usage: photo-review regions REGIONS.tsv ORIGINAL_DIRECTORY TEMPLATE.html OUTPUT.html | photo-review coverage COVERAGE.tsv ORIGINAL_DIRECTORY SOURCE.pnm REFERENCE.pnm CANDIDATE.pnm MAP.pnm TEMPLATE.html OUTPUT.html"

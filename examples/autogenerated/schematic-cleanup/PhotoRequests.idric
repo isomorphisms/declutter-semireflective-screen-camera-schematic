@@ -1,0 +1,153 @@
+module PhotoRequests
+
+import Data.List
+import Data.List1
+import Data.Text
+
+public export
+choice review_reason one_of
+  glare_obscures
+  blurred_detail
+  missing_coverage
+  disagreeing_views
+  uncertain_alignment
+  processing_loss
+  unchecked_region
+  preserved_appearance
+
+public export
+record PhotoRegion where
+  constructor RegionForReview
+  identity : Text
+  source_name : Text
+  source_sha256 : Text
+  left : Int
+  top : Int
+  columns : Int
+  rows : Int
+  reason : review_reason
+  evidence : Text
+
+export
+reason_name : review_reason → Text
+reason_name glare_obscures = "glare"
+reason_name blurred_detail = "blur"
+reason_name missing_coverage = "missing-coverage"
+reason_name disagreeing_views = "disagreement"
+reason_name uncertain_alignment = "alignment"
+reason_name processing_loss = "processing-loss"
+reason_name unchecked_region = "unchecked"
+reason_name preserved_appearance = "preserved"
+
+export
+reason_label : review_reason → Text
+reason_label glare_obscures = "Glare obscures the detail"
+reason_label blurred_detail = "Detail is blurred"
+reason_label missing_coverage = "Coverage is missing"
+reason_label disagreeing_views = "Available views do not establish the detail"
+reason_label uncertain_alignment = "Overlap cannot be aligned reliably"
+reason_label processing_loss = "Cleanup lost original detail"
+reason_label unchecked_region = "This region has not been checked"
+reason_label preserved_appearance = "Checked local appearance survives"
+
+export
+needs_photograph : review_reason → Bool
+needs_photograph processing_loss = False
+needs_photograph unchecked_region = False
+needs_photograph preserved_appearance = False
+needs_photograph _ = True
+
+export
+guidance_for : review_reason → Text
+guidance_for glare_obscures = "Keep the same HMI diagram and scroll position. Move the camera to another side or height until the reflection leaves the marked area. Include nearby circuit shapes for alignment."
+guidance_for blurred_detail = "Keep the same HMI diagram and scroll position. Take a steady, focused view close enough to show individual strokes, plus a wider context view with nearby circuit shapes."
+guidance_for missing_coverage = "Take a wider or adjacent scrolled view that overlaps the visible circuit and includes both sides of the missing area. Retain distinctive landmarks in the overlap."
+guidance_for disagreeing_views = "Photograph this region from another side or height, keeping nearby circuit shapes visible. Keep the diagram and scroll position unchanged for the angle views."
+guidance_for uncertain_alignment = "Take a wider view spanning the proposed join, or overlapping scrolled views containing distinctive circuit shapes on both sides. Repeated parallel wires alone cannot identify the overlap."
+guidance_for processing_loss = "Use the original pixels and repair the cleanup. Another photograph is not required for this finding: the original already contains the tested detail."
+guidance_for unchecked_region = "Inspect the original before deciding whether another photograph is needed. An unchecked region is not verified."
+guidance_for preserved_appearance = "This checks only the declared local appearance. Whole symbols, electrical continuity and the surrounding sheet require their own evidence."
+
+safe_identifier : Text → Bool
+safe_identifier text = length (unpack text) > 0 && length (unpack text) <= 96 &&
+  all (\character ⇒ isAlphaNum character || elem character ['-', '_']) (unpack text)
+
+source_basename : Text → Bool
+source_basename text = length (unpack text) > 0 && length (unpack text) <= 128 &&
+  not (text ≟ "." || text ≟ "..") &&
+  all (\character ⇒ isAlphaNum character || elem character ['-', '_', '.']) (unpack text)
+
+sha256_text : Text → Bool
+sha256_text text = length (unpack text) ≟ 64 &&
+  all (\character ⇒ elem character (unpack "0123456789abcdef")) (unpack text)
+
+coordinate : Text → Either Text Int
+coordinate text = if text ≟ "" || not (all isDigit (unpack text))
+  then Left "REGION_COORDINATE: expected a nonnegative integer" else
+  case parseInteger {a = Integer} text of
+    Just value ⇒ if value <= 32768 then Right (cast value)
+                  else Left "REGION_COORDINATE: coordinate exceeds raster bounds"
+    Nothing ⇒ Left "REGION_COORDINATE: invalid integer"
+
+parse_reason : Text → Either Text review_reason
+parse_reason "glare" = Right glare_obscures
+parse_reason "blur" = Right blurred_detail
+parse_reason "missing-coverage" = Right missing_coverage
+parse_reason "disagreement" = Right disagreeing_views
+parse_reason "alignment" = Right uncertain_alignment
+parse_reason "processing-loss" = Right processing_loss
+parse_reason "unchecked" = Right unchecked_region
+parse_reason "preserved" = Right preserved_appearance
+parse_reason _ = Left "REGION_REASON: unsupported evidence reason"
+
+parse_region : Text → Either Text PhotoRegion
+parse_region line = case forget (split (≟ '\t') line) of
+  ["region", identity, source, digest, x, y, width, height, cause, evidence] ⇒ do
+    left ← coordinate x
+    top ← coordinate y
+    columns ← coordinate width
+    rows ← coordinate height
+    reason ← parse_reason cause
+    if not (safe_identifier identity && source_basename source && sha256_text digest) ||
+       columns <= 0 || rows <= 0 || columns > 512 || rows > 512 ||
+       trim evidence ≟ "" || length (unpack evidence) > 2048 ||
+       any (\character ⇒ ord character < 32) (unpack evidence)
+       then Left "REGION_IDENTITY: invalid identifier, source, digest, rectangle or evidence"
+       else Right (RegionForReview identity source digest left top columns rows reason evidence)
+  _ ⇒ Left "REGION_ROW: require ten tab-separated fields"
+
+unique : List Text → Bool
+unique [] = True
+unique (value :: rest) = not (elem value rest) && unique rest
+
+export
+parse_regions : Text → Either Text (List PhotoRegion)
+parse_regions text =
+  if length (unpack text) > 131072 || elem '\0' (unpack text)
+     then Left "REGION_MANIFEST: excessive or NUL-containing input" else
+  case filter (\line ⇒ trim line /= "" && not (isPrefixOf "#" (trim line))) (lines text) of
+    "version\tphoto-requests-v1" :: entries ⇒ do
+      if null entries || length entries > 24 then Left "REGION_COUNT: require 1 to 24 regions" else do
+        regions ← traverse parse_region entries
+        if unique (map identity regions) then Right regions
+          else Left "REGION_DUPLICATE: identifiers must be unique"
+    _ ⇒ Left "REGION_VERSION: expected photo-requests-v1"
+
+export
+escape_html : Text → Text
+escape_html text = fastConcat (map escape (unpack text))
+  where
+    escape : Char → Text
+    escape '&' = "&amp;"
+    escape '<' = "&lt;"
+    escape '>' = "&gt;"
+    escape '"' = "&quot;"
+    escape '\'' = "&#39;"
+    escape character = singleton character
+
+export
+region_row : PhotoRegion → Text
+region_row region = fastConcat (intersperse "\t"
+  ["region", region.identity, region.source_name, region.source_sha256,
+   show region.left, show region.top, show region.columns, show region.rows,
+   reason_name region.reason, region.evidence])

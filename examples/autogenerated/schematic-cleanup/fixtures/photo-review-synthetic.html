@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Schematic photograph review</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,sans-serif;background:#242628;color:#f1f0ed}
+*{box-sizing:border-box}body{margin:0}main,header,footer{max-width:760px;margin:auto;padding:20px}
+h1{font-size:1.5rem;font-weight:500;margin:0 0 8px}h2{font-size:1.15rem;font-weight:500;margin:0}
+p{margin:10px 0}header{padding-bottom:0}.secondary,figcaption,.coordinates{color:#c8c9cb}
+.coordinates,figcaption{font-size:.875rem;overflow-wrap:anywhere}.region{padding:20px;background:#303235;border-radius:12px;margin:0 0 24px;break-inside:avoid}
+.state{color:#ffd178}.region[data-cause="preserved"] .state{color:#b1d9bb}.guidance{border-left:3px solid #ffd178;padding-left:12px}
+label{display:block;margin:16px 0 0}button,select,input{font:inherit;max-width:100%;color:inherit}
+button,select{background:#44474b;border:1px solid #797d84;border-radius:6px;padding:10px 12px;min-height:44px}
+select{display:block;width:100%;margin-top:6px}button{cursor:pointer}button:disabled{opacity:.6;cursor:wait}
+input[type=file]{display:block;margin-top:8px;width:100%}input::file-selector-button{font:inherit;padding:10px;border-radius:6px;margin-right:10px}
+summary{cursor:pointer;padding:12px 0;min-height:44px}.overview{display:block;width:100%;max-height:480px;margin-top:12px}
+figure{margin:16px 0;overflow-wrap:anywhere}img{max-width:100%;height:auto;display:block;border-radius:3px}
+.original-detail{image-rendering:pixelated;min-width:min(100%,240px)}figcaption{margin-top:6px}.new-photos img{max-height:400px}
+.notice{font-size:.875rem}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}.upload-status{overflow-wrap:anywhere}
+.error{color:#ffb2a9}a{color:#c9dfff}footer{padding-top:0}details[open]{padding-bottom:8px}
+@media(max-width:400px){main,header,footer{padding:14px}.region{padding:14px}}
+@media print{button,input,select,.toolbar{display:none}.region{border:1px solid #777}details{display:block}}
+</style>
+</head>
+<body>
+<header>
+<h1>Schematic photograph review</h1>
+<p>Unresolved areas stay unresolved until their missing evidence is checked.</p>
+<p class="notice secondary">These are source-bound findings, not a confidence map of every pixel. Unlisted areas are unchecked. Circuit connections across gaps remain unknown.</p>
+<div class="toolbar"><button id="save-review" type="button">Save review and photographs</button></div>
+<p id="save-status" class="secondary" role="status">Changes remain in this page until you save a copy. Photographs stay local.</p>
+</header>
+<main id="regions">
+<article class="region" id="synthetic-glare" data-source="f372049e5e464a2ae81091479f8262d18197998dccece77720f7ede7b85ccc28" data-cause="glare" data-disposition="now"><h2>Glare obscures the detail</h2><p class="state" aria-live="polite">Another view needed</p><p>Synthetic fixture only: no private photographs are included.</p><p class="coordinates">photo-review-original.ppm · original x=0 y=0 · 2 × 2 pixels</p><details><summary>Locate on original photograph</summary><svg class="overview" viewBox="0 0 2 2" role="img" aria-label="Original photograph with the review region outlined"><image width="2" height="2" href="data:image/bmp;base64,Qk1GAAAAAAAAADYAAAAoAAAAAgAAAAIAAAABABgAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAASUhHCktKAABDQkFGRUQAAA=="/><rect x="0" y="0" width="2" height="2" fill="none" stroke="#ffd178" stroke-width="6" stroke-dasharray="14 8"/></svg><p class="secondary">Sampled location overview. The detail below retains original pixels.</p></details><figure><img class="original-detail" src="data:image/bmp;base64,Qk1GAAAAAAAAADYAAAAoAAAAAgAAAAIAAAABABgAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAASUhHCktKAABDQkFGRUQAAA==" alt="Unenhanced original region"/><figcaption>Original detail · no enhancement or generated content</figcaption></figure><p class="guidance">Keep the same HMI diagram and scroll position. Move the camera to another side or height until the reflection leaves the marked area. Include nearby circuit shapes for alignment.</p><label>Capture timing<select class="disposition"><option value="now">Ready to photograph</option><option value="later">Later</option><option value="unavailable">Cannot photograph</option></select></label><label class="capture">Add photographs<input class="photos" type="file" accept="image/*" multiple capture="environment"/></label><div class="new-photos"></div><p class="upload-status secondary" aria-live="polite"></p></article>
+<article class="region" id="synthetic-connection" data-source="f372049e5e464a2ae81091479f8262d18197998dccece77720f7ede7b85ccc28" data-cause="disagreement" data-disposition="now"><h2>Available views do not establish the detail</h2><p class="state" aria-live="polite">Another view needed</p><p>Synthetic unresolved endpoint used to exercise the request interface.</p><p class="coordinates">photo-review-original.ppm · original x=0 y=0 · 2 × 2 pixels</p><details><summary>Locate on original photograph</summary><svg class="overview" viewBox="0 0 2 2" role="img" aria-label="Original photograph with the review region outlined"><image width="2" height="2" href="data:image/bmp;base64,Qk1GAAAAAAAAADYAAAAoAAAAAgAAAAIAAAABABgAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAASUhHCktKAABDQkFGRUQAAA=="/><rect x="0" y="0" width="2" height="2" fill="none" stroke="#ffd178" stroke-width="6" stroke-dasharray="14 8"/></svg><p class="secondary">Sampled location overview. The detail below retains original pixels.</p></details><figure><img class="original-detail" src="data:image/bmp;base64,Qk1GAAAAAAAAADYAAAAoAAAAAgAAAAIAAAABABgAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAASUhHCktKAABDQkFGRUQAAA==" alt="Unenhanced original region"/><figcaption>Original detail · no enhancement or generated content</figcaption></figure><p class="guidance">Photograph this region from another side or height, keeping nearby circuit shapes visible. Keep the diagram and scroll position unchanged for the angle views.</p><label>Capture timing<select class="disposition"><option value="now">Ready to photograph</option><option value="later">Later</option><option value="unavailable">Cannot photograph</option></select></label><label class="capture">Add photographs<input class="photos" type="file" accept="image/*" multiple capture="environment"/></label><div class="new-photos"></div><p class="upload-status secondary" aria-live="polite"></p></article>
+<article class="region" id="synthetic-processing-loss" data-source="f372049e5e464a2ae81091479f8262d18197998dccece77720f7ede7b85ccc28" data-cause="processing-loss" data-disposition="now"><h2>Cleanup lost original detail</h2><p class="state" aria-live="polite">Processing repair needed</p><p>Synthetic processing failure; this state must not ask for a retake.</p><p class="coordinates">photo-review-original.ppm · original x=0 y=0 · 2 × 2 pixels</p><details><summary>Locate on original photograph</summary><svg class="overview" viewBox="0 0 2 2" role="img" aria-label="Original photograph with the review region outlined"><image width="2" height="2" href="data:image/bmp;base64,Qk1GAAAAAAAAADYAAAAoAAAAAgAAAAIAAAABABgAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAASUhHCktKAABDQkFGRUQAAA=="/><rect x="0" y="0" width="2" height="2" fill="none" stroke="#ffd178" stroke-width="6" stroke-dasharray="14 8"/></svg><p class="secondary">Sampled location overview. The detail below retains original pixels.</p></details><figure><img class="original-detail" src="data:image/bmp;base64,Qk1GAAAAAAAAADYAAAAoAAAAAgAAAAIAAAABABgAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAASUhHCktKAABDQkFGRUQAAA==" alt="Unenhanced original region"/><figcaption>Original detail · no enhancement or generated content</figcaption></figure><p class="guidance">Use the original pixels and repair the cleanup. Another photograph is not required for this finding: the original already contains the tested detail.</p></article>
+
+</main>
+<footer><p class="secondary">Received photographs require alignment and relevant appearance or connection checks. Neither receipt nor deferral grants verification.</p></footer>
+<script>
+// Narrow browser boundary: file selection, disposition, previews and offline save.
+// Findings, source identity, original crops and acceptance belong to Idriç.
+(() => {
+  const root = document.getElementById('regions');
+  const save = document.getElementById('save-review');
+  const saveStatus = document.getElementById('save-status');
+  const allowedDispositions = new Set(['now', 'later', 'unavailable']);
+  const maximumPhotoBytes = 12 * 1024 * 1024;
+  const maximumSessionBytes = 48 * 1024 * 1024;
+  const maximumPhotos = 12;
+  let reading = false;
+
+  function refresh(card) {
+    const selector = card.querySelector('.disposition');
+    if (!selector) return;
+    const disposition = allowedDispositions.has(card.dataset.disposition) ? card.dataset.disposition : 'now';
+    card.dataset.disposition = disposition;
+    selector.value = disposition;
+    const pending = card.querySelectorAll('.new-photo').length;
+    const timing = disposition === 'later' ? ' · capture deferred' : disposition === 'unavailable' ? ' · cannot photograph now' : '';
+    card.querySelector('.state').textContent = pending
+      ? `${pending} new photograph${pending === 1 ? '' : 's'} · verification pending${timing}`
+      : `Another view needed${timing}`;
+  }
+
+  function markUnsaved() {
+    saveStatus.textContent = 'Unsaved changes. Save a copy to retain timing choices and attached photographs.';
+  }
+
+  async function readPhoto(file) {
+    if (!file.type.startsWith('image/')) throw new Error('Select an image file.');
+    if (file.size > maximumPhotoBytes) throw new Error('This photograph exceeds the 12 MiB limit. Keep the original and add a smaller copy.');
+    const uri = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('The photograph could not be read.'));
+      reader.onabort = () => reject(new Error('Photograph reading was cancelled.'));
+      reader.readAsDataURL(file);
+    });
+    const image = new Image();
+    await new Promise((resolve, reject) => {
+      image.onload = () => image.naturalWidth && image.naturalHeight ? resolve() : reject(new Error('The image is empty.'));
+      image.onerror = () => reject(new Error('This image format could not be displayed. Keep the original and add a JPEG or PNG copy.'));
+      image.src = uri;
+    });
+    return image;
+  }
+
+  root.querySelectorAll('.region').forEach(card => {
+    refresh(card);
+    const selector = card.querySelector('.disposition');
+    if (selector) selector.addEventListener('change', () => {
+      card.dataset.disposition = selector.value;
+      refresh(card);
+      markUnsaved();
+    });
+    const picker = card.querySelector('.photos');
+    if (!picker) return;
+    picker.addEventListener('change', async () => {
+      if (reading) { picker.value = ''; return; }
+      const files = Array.from(picker.files || []);
+      if (!files.length) return;
+      reading = true;
+      save.disabled = true;
+      root.querySelectorAll('.photos').forEach(input => { input.disabled = true; });
+      const status = card.querySelector('.upload-status');
+      status.textContent = 'Reading photographs locally…';
+      status.classList.remove('error');
+      const errors = [];
+      for (const file of files) {
+        try {
+          const existing = Array.from(root.querySelectorAll('.new-photo'));
+          const bytes = existing.reduce((sum, figure) => sum + Number(figure.dataset.bytes || 0), 0);
+          if (existing.length >= maximumPhotos || bytes + file.size > maximumSessionBytes)
+            throw new Error('This review is full. Save it, then continue in a separate review copy.');
+          const image = await readPhoto(file);
+          const figure = document.createElement('figure');
+          figure.className = 'new-photo';
+          figure.dataset.bytes = String(file.size);
+          image.alt = 'New photograph awaiting verification';
+          const caption = document.createElement('figcaption');
+          caption.textContent = `${file.name} · new evidence · verification pending`;
+          figure.append(image, caption);
+          card.querySelector('.new-photos').append(figure);
+          refresh(card);
+          markUnsaved();
+        } catch (error) { errors.push(error.message || 'Photograph could not be added.'); }
+      }
+      status.textContent = errors.length ? errors.join(' ') : 'Added locally. The missing detail still requires verification.';
+      status.classList.toggle('error', !!errors.length);
+      picker.value = '';
+      reading = false;
+      save.disabled = false;
+      root.querySelectorAll('.photos').forEach(input => { input.disabled = false; });
+    });
+  });
+
+  save.addEventListener('click', () => {
+    if (reading) return;
+    const snapshot = document.documentElement.cloneNode(true);
+    snapshot.querySelectorAll('input[type=file]').forEach(input => { input.value = ''; input.removeAttribute('disabled'); });
+    snapshot.querySelector('#save-review').removeAttribute('disabled');
+    snapshot.querySelector('#save-status').textContent = 'Saved review reopened. Further changes require saving another copy.';
+    const file = new Blob(['<!doctype html>\n' + snapshot.outerHTML], {type: 'text/html;charset=utf-8'});
+    const uri = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = uri;
+    link.download = 'schematic-photo-review.html';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(uri), 30000);
+    saveStatus.textContent = 'Review copy prepared for download. Keep that copy to retain choices and photographs.';
+  });
+})();
+</script>
+</body>
+</html>

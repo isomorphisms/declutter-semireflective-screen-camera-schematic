@@ -1,0 +1,25 @@
+PASS	source-bound region admitted
+PASS	empty manifests rejected
+PASS	duplicate identifiers rejected
+PASS	source traversal rejected
+PASS	invalid digest rejected
+PASS	zero rectangle rejected
+PASS	large crop rejected
+PASS	unknown reason rejected
+PASS	markup identifier rejected
+PASS	processing loss never requests retake
+PASS	unchecked never requests retake
+PASS	preserved appearance never requests retake
+PASS	all acquisition reasons request evidence
+PASS	HTML text escaped
+PASS	manifest roundtrip
+PASS	out-of-frame crop rejected
+PASS	zero sampling step rejected
+PASS	BMP includes row padding
+PASS	encoding leaves original RGB unchanged
+PASS	coverage adapter retains observed local PASS
+PASS	coverage adapter requests evidence for ambiguous endpoint
+PASS	actual contrast failures become processing repair
+PASS	contrast failures do not create retake requests
+PASS	foreign ownership is an error, not a photo request
+PASS	photo-review focused host suite
