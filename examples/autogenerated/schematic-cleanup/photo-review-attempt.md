@@ -71,9 +71,11 @@ lowercase choice surface and explicit `List1.forget`. A later test indentation
 error was corrected without changing acceptance. These were source mistakes,
 not demonstrated compiler defects or permission to change implementation language.
 
-Local browser startup requires sockets blocked by the host. Browser acceptance
-is therefore executed separately in hosted CI with generated synthetic imagery;
-it is not counted as Idriç compiler or physical camera evidence.
+Local browser startup requires sockets blocked by the host. Hosted browser
+acceptance passed separately against generated synthetic imagery at
+`0a22dedebc26750a2e700840bff05d1665cd0341`. This is not counted as Idriç compiler or
+physical camera evidence. The first runner attempt exposed the pinned browser's
+lack of Ubuntu 26.04 support; the workflow now names supported Ubuntu 24.04.
 
 There is no fallback image processing. The inherited compiler's Unicode-minus
 gap remains the existing documented notation exception; supported subtraction

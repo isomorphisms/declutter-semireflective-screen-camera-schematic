@@ -60,6 +60,8 @@ processing repair; ambiguous or unobserved circuit witnesses become requests
 for evidence; contamination does not become a circuit feature. Foreign source
 identity and malformed frames are errors, not excuses to request another photo.
 Successful checks retain their narrow local-appearance meaning.
+An unobserved witness alone does not prove glare or missing frame coverage:
+its generated request retains a generic insufficient-evidence reason.
 
 Both entry points use complete read/write admission and exclusive output
 creation. Existing files are not replaced. Failure before writing leaves no new

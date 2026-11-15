@@ -84,19 +84,21 @@ main = do
       let wire = WitnessedFeature "wire" wire_segment observed 0 0 2 2 "original-wire" "none"
       let marking = WitnessedFeature "marking" legible_text observed 0 0 2 2 "original-marking" "none"
       let uncertain_endpoint = WitnessedFeature "unknown-endpoint" wire_endpoint ambiguous 0 0 1 1 "occluded-endpoint" "none"
+      let unseen_marking = WitnessedFeature "unseen-marking" terminal_mark unobserved 0 0 1 1 "no-established-identity" "none"
       let wire_probe = StrokeBesideBackground "wire" 1 0 0 0 0 (RGB 0 255 0) (RGB 255 0 0)
       let mark_probe = StrokeBesideBackground "marking" 1 0 0 0 0 (RGB 0 255 0) (RGB 255 0 0)
-      let coverage = NativePreservationSlice 18 2 2 good_digest good_digest "test" 2 2 0 0 good_digest (pack (replicate 40 'a')) [wire, marking, uncertain_endpoint] [wire_probe, mark_probe]
+      let coverage = NativePreservationSlice 18 2 2 good_digest good_digest "test" 2 2 0 0 good_digest (pack (replicate 40 'a')) [wire, marking, uncertain_endpoint, unseen_marking] [wire_probe, mark_probe]
       Right supported ← coverage_regions coverage image image image identities "original.ppm"
         | Left message ⇒ do putStrLn message; exitFailure
       expect "coverage adapter retains observed local PASS" (length (filter (\region ⇒ reason_name region.reason ≟ "preserved") supported) ≟ 2)
-      expect "coverage adapter requests evidence for ambiguous endpoint" (length (filter (\region ⇒ needs_photograph region.reason) supported) ≟ 1)
+      expect "coverage adapter requests evidence for unresolved witnesses" (length (filter (\region ⇒ needs_photograph region.reason) supported) ≟ 2)
+      expect "unobserved does not invent a cause" (not (any (\region ⇒ reason_name region.reason ≟ "missing-coverage" || reason_name region.reason ≟ "glare") supported))
       Right clipped ← new_image 2 2
         | Left message ⇒ do putStrLn message; exitFailure
       Right damaged ← coverage_regions coverage image image clipped identities "original.ppm"
         | Left message ⇒ do putStrLn message; exitFailure
       expect "actual contrast failures become processing repair" (length (filter (\region ⇒ reason_name region.reason ≟ "processing-loss") damaged) ≟ 2)
-      expect "contrast failures do not create retake requests" (length (filter (\region ⇒ needs_photograph region.reason) damaged) ≟ 1)
+      expect "contrast failures do not create retake requests" (length (filter (\region ⇒ needs_photograph region.reason) damaged) ≟ 2)
       _ ← put_pixel identities 0 0 (RGB 19 19 19)
       foreign_map ← coverage_regions coverage image image image identities "original.ppm"
       expect "foreign ownership is an error, not a photo request" (is_left foreign_map)

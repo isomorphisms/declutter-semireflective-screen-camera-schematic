@@ -183,7 +183,9 @@ coverage_regions manifest original reference candidate identities source = colle
           result ← verify_witness manifest original reference candidate identities witness
           let observation = case witness.state of
                 ambiguous ⇒ Right disagreeing_views
-                unobserved ⇒ Right missing_coverage
+                -- Unobserved is an evidence state, not proof of a missing frame
+                -- or glare. Keep the cause generic until an inspection establishes it.
+                unobserved ⇒ Right disagreeing_views
                 observed ⇒ case result of
                   Right () ⇒ Right preserved_appearance
                   Left message ⇒ if isPrefixOf "LOCAL_INFORMATION:" message || isPrefixOf "COVERAGE_LOSS:" message
