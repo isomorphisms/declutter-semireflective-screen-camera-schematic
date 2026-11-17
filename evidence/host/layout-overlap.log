@@ -1,0 +1,1 @@
+FAIL: overlapping destination rectangles would silently overwrite source evidence

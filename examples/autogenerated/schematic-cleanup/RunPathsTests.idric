@@ -1,0 +1,102 @@
+module RunPathsTests
+
+import Data.Buffer
+import Data.List
+import Data.Text
+import FreshFiles
+import RunPaths
+import System
+import System.File
+
+covering
+fail_with : Text → IO value
+fail_with message = do
+  putStrLn ("FAIL\t" ++ message)
+  exitFailure
+
+covering
+require_right : Either Text value → IO value
+require_right (Right value) = pure value
+require_right (Left message) = fail_with message
+
+covering
+reject : Text → Either Text value → IO ()
+reject label (Left message) = putStrLn ("PASS\t" ++ label ++ "\t" ++ message)
+reject label (Right _) = fail_with (label ++ " falsely accepted")
+
+covering
+fixture : Text → Text → IO ()
+fixture path text = do
+  Right () ← writeFile path text
+    | Left error ⇒ fail_with (show error)
+  pure ()
+
+covering
+invoke : List Text → IO ()
+invoke arguments = do
+  status ← System.Escaped.system arguments
+  if status ≟ 0 then pure () else fail_with "fixture command failed"
+
+covering
+expect_text : Text → Text → IO ()
+expect_text path expected = do
+  Right text ← readFile path
+    | Left error ⇒ fail_with (show error)
+  if text ≟ expected then pure () else fail_with ("changed protected bytes: " ++ path)
+
+covering
+main : IO ()
+main = do
+  [_, directory] ← getArgs
+    | _ ⇒ fail_with "usage: run-paths-tests FRESH_DISPOSABLE_DIRECTORY"
+  let source = directory ++ "/source with spaces"
+  let alias = directory ++ "/directory-alias"
+  let new_path = directory ++ "/new output "
+  fixture source "original bytes\n"
+  invoke ["ln", "-s", "--", directory, alias]
+  _ ← admit_run [source] [new_path] >>= require_right
+  putStrLn "PASS\tfresh destination with spaces admitted"
+  admit_run [source] [directory ++ "/./source with spaces"] >>= reject "dot-alias"
+  admit_run [source] [alias ++ "/source with spaces"] >>= reject "symlink-parent-input-alias"
+  admit_run [source] [new_path, alias ++ "/new output "] >>= reject "future-output-output-alias"
+  admit_run [source] [directory ++ "/future", directory ++ "/missing-parent/future"] >>= reject "missing-parent-before-any-write"
+  admit_run [source] [directory ++ "/bad\nname"] >>= reject "newline-path"
+  admit_run [source] [directory ++ "/bad\0suffix"] >>= reject "NUL-path"
+  invoke ["ln", "--", source, directory ++ "/hard-link"]
+  admit_run [source] [directory ++ "/hard-link"] >>= reject "hard-link-output"
+  invoke ["ln", "-s", "--", directory ++ "/absent", directory ++ "/dangling"]
+  admit_run [source] [directory ++ "/dangling"] >>= reject "dangling-output"
+  invoke ["mkfifo", "--", directory ++ "/source-fifo"]
+  admit_sources [directory ++ "/source-fifo"] >>= reject "FIFO-source-rejected-without-opening"
+  admit_sources [directory] >>= reject "directory-source-rejected"
+  -- Deliberately bypass path admission: final open itself must protect bytes.
+  write_new_text source "destroyed" >>= reject "exclusive-text-existing-file"
+  write_new_text (directory ++ "/hard-link") "destroyed" >>= reject "exclusive-text-hard-link"
+  write_new_text (directory ++ "/dangling") "destroyed" >>= reject "exclusive-text-dangling-link"
+  _ ← write_new_text new_path "new bytes\n" >>= require_right
+  expect_text new_path "new bytes\n"
+  write_new_text new_path "destroyed" >>= reject "repeat-output-refused"
+  Just bytes ← newBuffer 3
+    | Nothing ⇒ fail_with "cannot allocate tiny binary fixture"
+  setString bytes 0 "ABC"
+  write_new_buffer (directory ++ "/bad-size") bytes 4 >>= reject "binary-buffer-overrun"
+  write_new_buffer (directory ++ "/bad-negative") bytes (-1) >>= reject "binary-negative-size"
+  _ ← write_new_buffer (directory ++ "/binary") bytes 3 >>= require_right
+  expect_text (directory ++ "/binary") "ABC"
+  write_new_buffer source bytes 3 >>= reject "exclusive-binary-existing-file"
+  -- An actual name appearing after admission is a deterministic check/use case.
+  let raced = directory ++ "/late-input-alias"
+  _ ← admit_run [source] [raced] >>= require_right
+  invoke ["ln", "-s", "--", source, raced]
+  write_new_buffer raced bytes 3 >>= reject "symlink-inserted-after-admission"
+  let raced_hard = directory ++ "/late-hard-link"
+  _ ← admit_run [source] [raced_hard] >>= require_right
+  invoke ["ln", "--", source, raced_hard]
+  write_new_text raced_hard "destroyed" >>= reject "hard-link-inserted-after-admission"
+  expect_text source "original bytes\n"
+  missing ← System.Escaped.system ["test", "-e", directory ++ "/absent"]
+  partial_output ← System.Escaped.system ["test", "-e", directory ++ "/future"]
+  bad_buffer ← System.Escaped.system ["test", "-e", directory ++ "/bad-size"]
+  if missing ≟ 1 && partial_output ≟ 1 && bad_buffer ≟ 1
+     then putStrLn "PASS\tpath admission, exclusive writes, late-alias refusal and protected source bytes"
+     else fail_with "rejected invocation created an output or dangling target"

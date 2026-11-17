@@ -1,0 +1,17 @@
+Exception: attempt to reference unbound identifier SystemC-45Info-isWindows at line 730, char 89 of /workspace/scratch/5cf074ba5c15/collision-repair/_/build/exec/collisiontests_app/collisiontests.ss
+Error: While processing right hand side of positive_cases. When unifying:
+    String
+and:
+    List ?a
+Mismatch between: String and List ?a.
+
+CollisionTests:182:37--182:48
+ 178 |   write_fixture plan "canvas 5 3\nearlier positive-input 0 0 3 2\nlater positive-second 0 0 3 2\nsimilarity 1000000 0 1000000 0\norigin -1 0\nseam 1\ngap 0\n"
+ 179 |   let inputs = [source, second, source ++ ".sources.pnm", second ++ ".sources.pnm", window_path, layout, plan]
+ 180 |   before ← snapshot inputs
+ 181 |   results ← traverse (\(label, arguments) ⇒ do
+ 182 |     status ← System.Escaped.system (executables ++ "/" ++ label :: arguments)
+                                           ^^^^^^^^^^^
+
+Warning: compiling hole CollisionTests.positive_cases
+Error: INTERNAL ERROR: Chez exited with return code 255

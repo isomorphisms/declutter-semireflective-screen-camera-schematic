@@ -1,0 +1,12 @@
+defect	state	approximate_original_region	consequence
+control-1712-1713	UNPROVEN	1712 rotor-reverse row around y1200-1380; 1713 upper row	Retained separate sections; no cross-seam wire claim
+control-1713-1718	UNPROVEN	1713 y1180-1410; 1718 y390-640	Small repeated circuit region; withheld fit unstable
+control-1715-1716	UNPROVEN	1715 overload row y1240-1350; 1716 y220-300	Bezel/dust proximity and unstable fit; retained gap
+power-1721-1722	PROVISIONAL_UNUSED	1721 lower return bends y1100-1250; 1722 y500-730	Repeated parallel conductors insufficient independent identity corroboration
+left-right-joins	UNPROVEN	Both diagrams, all left-right boundaries	No conductor is drawn between the two columns
+control-top-glare	OBSCURED	1712 x850-1151 y100-500; 1713 x850-1151 y150-450	Faint rightward labels and endpoints remain uncertain
+control-hand-reflection	PARTIAL_CLEANUP	1713 lower outputs; 1718 power supply around x430-850 y950-1290; 1716 optional inputs	Some text and line fragments remain weak or mixed with reflection
+power-transformer-and-terminal-labels	PARTIAL_CLEANUP	1721 transformer/breaker marks; 1723 terminal strips and motor labels	Read at native resolution against originals; ambiguous characters are not retyped
+glass-mask-boundaries	UNRESOLVED	All per-photo registration/windows polygons; narrow edge insets	Observed clipped fragments can be excluded with bezel; originals retained for inspection
+dust-and-reflection-contours	REMAIN	Scattered glass specks; lower dust pile; broad glare/hand edges	No universal dust separation or complete reflection cancellation
+supported-pair-seams	GEOMETRY_ONLY	1716-1717 seam anchor row500; 1720-1723 seam row680	24-pixel grey gap; geometric fit does not assert electrical continuity

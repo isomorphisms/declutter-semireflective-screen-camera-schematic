@@ -1,0 +1,360 @@
+module PaperMesh
+
+import Data.List
+import Data.Maybe
+import Data.Text
+import FreshFiles
+import RunPaths
+import SchematicRaster
+import VerifyCoverage
+import System
+import System.File
+
+-- A measured mesh selects samples from photographs. It is not a drawing model.
+-- Coordinates are bounded before products; all products fit signed 64-bit Int.
+public export
+record MeshPoint where
+  constructor MeshAt
+  column : Int
+  row : Int
+
+public export
+record MeshSource where
+  constructor PaperPhotograph
+  identity : Int
+  name : Text
+  columns : Int
+  rows : Int
+  digest : Text
+
+public export
+record MeshFace where
+  constructor Triangle
+  source_id : Int
+  destination_a : MeshPoint
+  original_a : MeshPoint
+  destination_b : MeshPoint
+  original_b : MeshPoint
+  destination_c : MeshPoint
+  original_c : MeshPoint
+
+public export
+record MeshGap where
+  constructor UnknownRectangle
+  left : Int
+  top : Int
+  columns : Int
+  rows : Int
+
+public export
+record MeshPlan where
+  constructor PaperSheet
+  columns : Int
+  rows : Int
+  sources : List MeshSource
+  faces : List MeshFace
+  gaps : List MeshGap
+
+export
+signed_area : MeshPoint → MeshPoint → MeshPoint → Int
+signed_area a b c = (b.column - a.column) × (c.row - a.row) -
+                    (b.row - a.row) × (c.column - a.column)
+
+bounded_point : MeshPoint → Bool
+bounded_point point = point.column >= 0 && point.column <= 16384 &&
+                      point.row >= 0 && point.row <= 16384
+
+export
+face_geometry : MeshFace → Bool
+face_geometry face =
+  all bounded_point [face.destination_a, face.destination_b, face.destination_c,
+                     face.original_a, face.original_b, face.original_c] &&
+  signed_area face.destination_a face.destination_b face.destination_c > 0 &&
+  signed_area face.original_a face.original_b face.original_c > 0
+
+-- Half-open top/left ownership gives shared mesh edges exactly one owner.
+-- Bottom/right outer boundaries are coordinates one past the last sample.
+edge_owned : MeshPoint → MeshPoint → MeshPoint → Bool
+edge_owned first second point =
+  let area = signed_area first second point in
+  area > 0 || (area ≟ 0 &&
+    (second.row < first.row ||
+     (second.row ≟ first.row && second.column > first.column)))
+
+round_nonnegative : Int → Int → Int
+round_nonnegative numerator denominator =
+  (numerator + denominator `div` 2) `div` denominator
+
+export
+sample_coordinate : MeshFace → MeshPoint → Maybe MeshPoint
+sample_coordinate face point =
+  if not (bounded_point point && face_geometry face) ||
+     not (edge_owned face.destination_a face.destination_b point &&
+          edge_owned face.destination_b face.destination_c point &&
+          edge_owned face.destination_c face.destination_a point)
+     then Nothing else
+    let area = signed_area face.destination_a face.destination_b face.destination_c
+        a = signed_area face.destination_b face.destination_c point
+        b = signed_area face.destination_c face.destination_a point
+        c = area - a - b
+    in Just (MeshAt
+       (round_nonnegative (a × face.original_a.column + b × face.original_b.column +
+                           c × face.original_c.column) area)
+       (round_nonnegative (a × face.original_a.row + b × face.original_b.row +
+                           c × face.original_c.row) area))
+
+bounded_integer : Text → Either Text Int
+bounded_integer text =
+  if length (unpack text) > 8 then Left "MESH_INTEGER: too many digits" else
+  case parseInteger {a = Integer} text of
+    Nothing ⇒ Left "MESH_INTEGER: expected nonnegative decimal integer"
+    Just value ⇒ if value < 0 || value > 16384
+      then Left "MESH_INTEGER: outside 0..16384" else Right (cast value)
+
+source_name_allowed : Text → Bool
+source_name_allowed name = name /= "" && name /= "." && name /= ".." &&
+  not (elem '/' (unpack name)) && not (elem (chr 92) (unpack name))
+
+valid_digest : Text → Bool
+valid_digest digest = length (unpack digest) ≟ 64 &&
+  all (\character ⇒ elem character (unpack "0123456789abcdef")) (unpack digest)
+
+export
+find_source : Int → List MeshSource → Maybe MeshSource
+find_source identity [] = Nothing
+find_source identity (source :: rest) =
+  if identity ≟ source.identity then Just source else find_source identity rest
+
+parse_source : List Text → Either Text MeshSource
+parse_source ["source", identity, name, width, height, digest] = do
+  number ← bounded_integer identity
+  columns ← bounded_integer width
+  rows ← bounded_integer height
+  if number < 1 || number > 255 || columns < 1 || rows < 1 ||
+     columns × rows > 8000000 || not (source_name_allowed name) ||
+     not (valid_digest digest)
+    then Left "MESH_SOURCE: invalid identity, name, shape or SHA-256"
+    else Right (PaperPhotograph number name columns rows digest)
+parse_source _ = Left "MESH_SOURCE: expected source ID BASENAME WIDTH HEIGHT SHA256"
+
+parse_point : Text → Text → Either Text MeshPoint
+parse_point column row = do
+  x ← bounded_integer column
+  y ← bounded_integer row
+  Right (MeshAt x y)
+
+parse_face : List Text → Either Text MeshFace
+parse_face ["triangle", identity, ax, ay, au, av, bx, by, bu, bv, cx, cy, cu, cv] = do
+  number ← bounded_integer identity
+  da ← parse_point ax ay
+  sa ← parse_point au av
+  db ← parse_point bx by
+  sb ← parse_point bu bv
+  dc ← parse_point cx cy
+  sc ← parse_point cu cv
+  let face = Triangle number da sa db sb dc sc
+  if number < 1 || number > 255 || not (face_geometry face)
+    then Left "MESH_FACE: degenerate, reflected or unbounded triangle"
+    else Right face
+parse_face _ = Left "MESH_FACE: expected triangle ID DX0 DY0 SX0 SY0 DX1 DY1 SX1 SY1 DX2 DY2 SX2 SY2"
+
+parse_gap : List Text → Either Text MeshGap
+parse_gap ["gap", left, top, width, height] = do
+  x ← bounded_integer left
+  y ← bounded_integer top
+  columns ← bounded_integer width
+  rows ← bounded_integer height
+  if columns < 1 || rows < 1 then Left "MESH_GAP: empty gap"
+    else Right (UnknownRectangle x y columns rows)
+parse_gap _ = Left "MESH_GAP: expected gap LEFT TOP WIDTH HEIGHT"
+
+active_line : Text → Bool
+active_line line = case unpack (trim line) of
+  [] ⇒ False
+  '#' :: _ ⇒ False
+  _ ⇒ True
+
+parse_entries : List Text → List MeshSource → List MeshFace → List MeshGap →
+                Either Text (List MeshSource, List MeshFace, List MeshGap)
+parse_entries [] sources faces gaps = Right (reverse sources, reverse faces, reverse gaps)
+parse_entries (line :: rest) sources faces gaps =
+  case words line of
+    "source" :: values ⇒ do
+      source ← parse_source ("source" :: values)
+      if any (\prior ⇒ prior.identity ≟ source.identity || prior.name ≟ source.name) sources
+        then Left "MESH_SOURCE: duplicate source identity or basename"
+        else if length sources >= 8 then Left "MESH_RESOURCE: at most eight photographs"
+        else parse_entries rest (source :: sources) faces gaps
+    "triangle" :: values ⇒ do
+      face ← parse_face ("triangle" :: values)
+      if length faces >= 128 then Left "MESH_RESOURCE: at most 128 triangles"
+        else parse_entries rest sources (face :: faces) gaps
+    "gap" :: values ⇒ do
+      gap ← parse_gap ("gap" :: values)
+      if length gaps >= 32 then Left "MESH_RESOURCE: at most 32 gaps"
+        else parse_entries rest sources faces (gap :: gaps)
+    _ ⇒ Left "MESH_DIRECTIVE: unrecognised or duplicate header"
+
+point_in_extent : Int → Int → MeshPoint → Bool
+point_in_extent columns rows point = bounded_point point &&
+  point.column <= columns && point.row <= rows
+
+face_fits : MeshPlan → MeshFace → Bool
+face_fits plan face = case find_source face.source_id plan.sources of
+  Nothing ⇒ False
+  Just source ⇒ face_geometry face &&
+    all (point_in_extent plan.columns plan.rows)
+        [face.destination_a, face.destination_b, face.destination_c] &&
+    all (point_in_extent source.columns source.rows)
+        [face.original_a, face.original_b, face.original_c]
+
+face_bounds : MeshFace → (Int, Int, Int, Int)
+face_bounds face =
+  (min face.destination_a.column (min face.destination_b.column face.destination_c.column),
+   min face.destination_a.row (min face.destination_b.row face.destination_c.row),
+   max face.destination_a.column (max face.destination_b.column face.destination_c.column),
+   max face.destination_a.row (max face.destination_b.row face.destination_c.row))
+
+face_cost : MeshFace → Int
+face_cost face = let (left, top, right, bottom) = face_bounds face in
+  (right - left) × (bottom - top)
+
+export
+plan_admitted : MeshPlan → Bool
+plan_admitted plan =
+  plan.columns > 0 && plan.columns <= 16384 && plan.rows > 0 && plan.rows <= 16384 &&
+  plan.columns × plan.rows <= 8000000 &&
+  length plan.sources > 0 && length plan.sources <= 8 &&
+  length plan.faces > 0 && length plan.faces <= 128 && length plan.gaps <= 32 &&
+  all (face_fits plan) plan.faces && sum (map face_cost plan.faces) <= 64000000 &&
+  all (\gap ⇒ gap.left >= 0 && gap.top >= 0 && gap.columns > 0 && gap.rows > 0 &&
+       gap.left <= plan.columns && gap.top <= plan.rows &&
+       gap.columns <= plan.columns - gap.left && gap.rows <= plan.rows - gap.top) plan.gaps
+
+export
+parse_mesh : Text → Either Text MeshPlan
+parse_mesh content = case filter active_line (lines content) of
+  header :: rest ⇒ case words header of
+    ["paper-mesh-v1", width, height] ⇒ do
+      columns ← bounded_integer width
+      rows ← bounded_integer height
+      (sources, faces, gaps) ← parse_entries rest [] [] []
+      let plan = PaperSheet columns rows sources faces gaps
+      if plan_admitted plan then Right plan
+        else Left "MESH_PLAN: shape, resource, source or triangle bounds rejected"
+    _ ⇒ Left "MESH_HEADER: expected paper-mesh-v1 WIDTH HEIGHT"
+  [] ⇒ Left "MESH_HEADER: empty plan"
+
+export
+inside_gap : MeshPlan → MeshPoint → Bool
+inside_gap plan point = any (\gap ⇒ point.column >= gap.left && point.row >= gap.top &&
+  point.column - gap.left < gap.columns && point.row - gap.top < gap.rows) plan.gaps
+
+export
+find_loaded : Int → List (MeshSource, Image) → Maybe Image
+find_loaded identity [] = Nothing
+find_loaded identity ((source, image) :: rest) =
+  if identity ≟ source.identity then Just image else find_loaded identity rest
+
+covering
+export
+load_sources : Text → List MeshSource → IO (Either Text (List (MeshSource, Image)))
+load_sources directory [] = pure (Right [])
+load_sources directory (source :: rest) = do
+  let path = directory ++ "/" ++ source.name
+  Right () ← verify_input_digest source.digest path
+    | Left message ⇒ pure (Left message)
+  Right image ← read_ppm path
+    | Left message ⇒ pure (Left message)
+  if image_width image /= source.columns || image_height image /= source.rows
+    then pure (Left "MESH_SOURCE: actual decoded shape differs from plan") else do
+      Right remaining ← load_sources directory rest
+        | Left message ⇒ pure (Left message)
+      pure (Right ((source, image) :: remaining))
+
+coordinate_pixel : Int → Int → Pixel
+coordinate_pixel identity coordinate =
+  RGB (cast identity) (cast (coordinate `mod` 256)) (cast (coordinate `div` 256))
+
+covering
+render_face : MeshPlan → List (MeshSource, Image) → Image → Image → Image →
+              MeshFace → IO (Either Text ())
+render_face plan originals output source_x source_y face = do
+  Just original ← pure (find_loaded face.source_id originals)
+    | Nothing ⇒ pure (Left "MESH_SOURCE: missing loaded photograph")
+  let (left, top, right, bottom) = face_bounds face
+  for_indices_result (cast (bottom - top)) top $ \row ⇒
+    for_indices_result (cast (right - left)) left $ \column ⇒ do
+      let point = MeshAt column row
+      if inside_gap plan point then pure (Right ()) else
+        case sample_coordinate face point of
+          Nothing ⇒ pure (Right ())
+          Just source_point ⇒ do
+            -- Samples rounded beyond an original edge remain unobserved.
+            sample ← pixel_at original source_point.column source_point.row
+            case sample of
+              Nothing ⇒ pure (Right ())
+              Just pixel ⇒ do
+                Just owner ← pixel_at source_x column row
+                  | Nothing ⇒ pure (Left "MESH_INTERNAL: output coordinate escaped bounds")
+                if owner.red /= 0 then pure (Left "MESH_OVERLAP: two faces claim one output sample") else do
+                  wrote ← put_pixel output column row pixel
+                  wrote_x ← put_pixel source_x column row (coordinate_pixel face.source_id source_point.column)
+                  wrote_y ← put_pixel source_y column row (coordinate_pixel face.source_id source_point.row)
+                  if wrote && wrote_x && wrote_y then pure (Right ())
+                    else pure (Left "MESH_INTERNAL: refused admitted sample")
+
+covering
+render_faces : MeshPlan → List (MeshSource, Image) → Image → Image → Image →
+               List MeshFace → IO (Either Text ())
+render_faces plan originals output source_x source_y [] = pure (Right ())
+render_faces plan originals output source_x source_y (face :: rest) = do
+  Right () ← render_face plan originals output source_x source_y face
+    | Left message ⇒ pure (Left message)
+  render_faces plan originals output source_x source_y rest
+
+covering
+export
+render_mesh : Text → Text → Text → Text → IO (Either Text ())
+render_mesh manifest_path manifest directory destination = do
+  Right plan ← pure (parse_mesh manifest)
+    | Left message ⇒ pure (Left message)
+  let output_paths = [destination, destination ++ ".x.pnm", destination ++ ".y.pnm", destination ++ ".plan.tsv"]
+  Right () ← admit_run (manifest_path :: map (\source ⇒ directory ++ "/" ++ source.name) plan.sources) output_paths
+    | Left message ⇒ pure (Left message)
+  Right originals ← load_sources directory plan.sources
+    | Left message ⇒ pure (Left message)
+  Right output ← new_image plan.columns plan.rows
+    | Left message ⇒ pure (Left message)
+  Right source_x ← new_image plan.columns plan.rows
+    | Left message ⇒ pure (Left message)
+  Right source_y ← new_image plan.columns plan.rows
+    | Left message ⇒ pure (Left message)
+  for_indices (cast plan.rows) 0 $ \row ⇒
+    for_indices (cast plan.columns) 0 $ \column ⇒ do
+      _ ← put_pixel output column row (RGB 232 232 232)
+      _ ← put_pixel source_x column row (RGB 0 0 0)
+      _ ← put_pixel source_y column row (RGB 0 0 0)
+      pure ()
+  Right () ← render_faces plan originals output source_x source_y plan.faces
+    | Left message ⇒ pure (Left message)
+  Right () ← write_ppm destination output
+    | Left message ⇒ pure (Left message)
+  Right () ← write_ppm (destination ++ ".x.pnm") source_x
+    | Left message ⇒ pure (Left message)
+  Right () ← write_ppm (destination ++ ".y.pnm") source_y
+    | Left message ⇒ pure (Left message)
+  write_new_text (destination ++ ".plan.tsv") manifest
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, manifest_path, directory, destination] ⇒ do
+      Right manifest ← readFile manifest_path
+        | Left error ⇒ do putStrLn (show error); exitFailure
+      Right () ← render_mesh manifest_path manifest directory destination
+        | Left message ⇒ do putStrLn message; exitFailure
+      putStrLn "PASS: source-sampled paper mesh; optical joins remain unverified"
+    _ ⇒ do putStrLn "usage: paper-mesh PLAN.tsv ORIGINAL_P6_DIRECTORY NEW_OUTPUT.pnm"; exitFailure

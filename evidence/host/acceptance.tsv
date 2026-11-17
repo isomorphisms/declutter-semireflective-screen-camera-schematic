@@ -1,0 +1,33 @@
+field	value
+compiler_repository	https://github.com/isomorphisms/Idric
+compiler_revision	2bce7677f513d711875e978bd6f5ad28b9e54d58
+compiler_version	Idris 2, version 0.8.0-2bce7677f
+compiler_bootstrap	PASS
+bootstrap_route	maintained edric bootstrap; pinned Chez 10.4.1
+host	Debian GNU/Linux 13; x86_64 Linux
+consumer_backend	Chez Scheme
+generated_c_backend	NOT_USED
+refc_backend	NOT_USED
+cleanup_compile	PASS
+assemble_compile	PASS
+raster_tests_compile	PASS
+raster_tests_runtime	PASS
+raster_tests_exit	0
+layout_valid_runtime	PASS
+layout_valid_exit	0
+layout_valid_shape	6x4
+layout_valid_source_first	1,1 = RGB 65,66,67
+layout_valid_source_last	3,2 = RGB 80,81,82
+layout_valid_gutter	0,0 = RGB 232,232,232
+layout_sample_observer	ImageMagick pixel read; independent of Idric implementation
+layout_overlap_refusal	PASS; exit 1; intended diagnostic; no output file
+layout_outside_refusal	PASS; exit 1; intended diagnostic; no output file
+layout_overflow_refusal	PASS; exit 1; intended diagnostic; no output file
+unicode_minus_support	FAIL; checker exit 1; Undefined name −
+unicode_minus_source	language-probes/UnicodeMinus.idric
+consumer_subtraction	accepted ASCII subtraction; current-compiler notation gap retained explicitly
+native_machine_backend_execution	NOT_CLAIMED
+physical_device_execution	NOT_RUN; not the requested execution target
+real_photograph_quality	separate parent evaluation; not established by synthetic acceptance
+commands	commands.txt
+artifact_and_source_digests	sources-and-artifacts.sha256

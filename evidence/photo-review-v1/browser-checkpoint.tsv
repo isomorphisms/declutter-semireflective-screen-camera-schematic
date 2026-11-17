@@ -1,0 +1,10 @@
+checkpoint	0a22dedebc26750a2e700840bff05d1665cd0341
+run	https://github.com/isomorphisms/declutter-semireflective-screen-camera-schematic/actions/runs/43725678944
+PASS	original embedded images decode in Chromium
+PASS	processing loss exposes repair without a retake control
+PASS	320, 390 and 760 pixel layouts fit
+PASS	deferral preserves unresolved evidence
+PASS	new photo remains pending and its filename is inert text
+PASS	saved copy reopens with disposition and original attached photograph
+PASS	undecodable upload does not count as evidence or clear the request
+PASS	no client approval control, external requests or runtime errors

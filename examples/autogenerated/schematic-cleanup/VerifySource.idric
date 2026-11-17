@@ -1,0 +1,119 @@
+module VerifySource
+
+import Data.Text
+import Data.List
+import SchematicRaster
+import System
+
+-- Independent replay of the declared final layouts, using unbounded Integer
+-- geometry rather than Registration's bounded machine-integer implementation.
+record SourcePosition where
+  constructor ObservedAt
+  column : Int
+  row : Int
+
+rounded : Integer → Integer → Integer
+rounded numerator denominator =
+  if numerator < 0 then - ((-numerator + denominator `div` 2) `div` denominator)
+                   else (numerator + denominator `div` 2) `div` denominator
+
+inverse : Integer → Integer → Integer → Integer → Int → Int → SourcePosition
+inverse a b tx ty x y =
+  let dx = cast {to = Integer} x × 1000000 - tx in
+  let dy = cast {to = Integer} y × 1000000 - ty in
+  let denominator = a × a + b × b in
+  ObservedAt (cast (rounded (a × dx + b × dy) denominator))
+             (cast (rounded (a × dy - b × dx) denominator))
+
+position : Text → Int → Int → Int → Maybe SourcePosition
+position "control" 12 x y = Just (ObservedAt x (y + 25))
+position "control" 13 x y = Just (ObservedAt x (y - 1429 + 35))
+position "control" 18 x y = Just (ObservedAt x (y - 2888 + 370))
+position "control" 15 x y = Just (ObservedAt (x - 1176) (y + 250))
+position "control" 16 x y =
+  Just (inverse 1053400 8200 56506600 (-674696800) (x - 1176) (y - 1599))
+position "control" 17 x y = Just (ObservedAt (x - 1176) (y - 1599))
+position "power" 20 x y =
+  Just (inverse 916800 46900 60278600 (-364557200) (x - 8) (y - 109))
+position "power" 23 x y = Just (ObservedAt (x - 8) (y - 109))
+position "power" 21 x y = Just (ObservedAt (x - 1184) (y + 300))
+position "power" 22 x y = Just (ObservedAt (x - 1184) (y - 1134 + 210))
+position _ _ _ _ = Nothing
+
+same_pixel : Pixel → Pixel → Bool
+same_pixel first second =
+  first.red ≟ second.red && first.green ≟ second.green && first.blue ≟ second.blue
+
+find_source : Int → List (Int, Image) → Maybe Image
+find_source identity [] = Nothing
+find_source identity ((number, image) :: rest) =
+  if identity ≟ number then Just image else find_source identity rest
+
+load_sources : Text → List Int → IO (Either Text (List (Int, Image)))
+load_sources directory [] = pure (Right [])
+load_sources directory (identity :: rest) = do
+  Right image ← read_ppm (directory ++ "/10000017" ++ show identity ++ ".ppm")
+    | Left message ⇒ pure (Left message)
+  Right remaining ← load_sources directory rest
+    | Left message ⇒ pure (Left message)
+  pure (Right ((identity, image) :: remaining))
+
+verify : Text → List (Int, Image) → Image → Image → IO (Either Text ())
+verify sheet sources reference identities =
+  if image_width reference /= image_width identities ||
+     image_height reference /= image_height identities
+     then pure (Left "provenance shape mismatch")
+     else for_indices_result (cast (image_height reference)) 0 $ \row ⇒
+       for_indices_result (cast (image_width reference)) 0 $ \column ⇒ do
+         Just identity ← pixel_at identities column row
+           | Nothing ⇒ pure (Left "missing source identity")
+         Just actual ← pixel_at reference column row
+           | Nothing ⇒ pure (Left "missing output sample")
+         if identity.red /= identity.green || identity.red /= identity.blue
+            then pure (Left "source map channels disagree")
+            else if identity.red ≟ 0 || identity.red ≟ 232
+              then if same_pixel actual (RGB 232 232 232)
+                      then pure (Right ()) else pure (Left "unknown region contains an asserted sample")
+              else do
+                Just source ← pure (find_source (cast identity.red) sources)
+                  | Nothing ⇒ pure (Left "unexpected photograph identity")
+                Just source_point ← pure (position sheet (cast identity.red) column row)
+                  | Nothing ⇒ pure (Left "source identity has no declared coordinate mapping")
+                Just expected ← pixel_at source source_point.column source_point.row
+                  | Nothing ⇒ pure (Left "source map reconstructs an invalid coordinate")
+                if same_pixel actual expected then pure (Right ())
+                  else pure (Left ("source RGB mismatch at output " ++ show column ++ "," ++ show row))
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, sheet, directory, reference_path, map_path] ⇒ do
+      let ids = the (List Int) (if sheet ≟ "control" then [12, 13, 15, 16, 17, 18]
+                else if sheet ≟ "power" then [20, 21, 22, 23] else [])
+      if null ids then do
+        putStrLn "FAIL: unsupported sheet"
+        exitFailure
+        else do
+          Right sources ← load_sources directory ids
+            | Left message ⇒ do
+                putStrLn ("FAIL: " ++ message)
+                exitFailure
+          Right reference ← read_ppm reference_path
+            | Left message ⇒ do
+                putStrLn ("FAIL: " ++ message)
+                exitFailure
+          Right identities ← read_ppm map_path
+            | Left message ⇒ do
+                putStrLn ("FAIL: " ++ message)
+                exitFailure
+          Right () ← verify sheet sources reference identities
+            | Left message ⇒ do
+                putStrLn ("FAIL: " ++ message)
+                exitFailure
+          putStrLn ("PASS: every " ++ sheet ++ " reference pixel replays from original RGB or explicit grey; " ++
+                     show (image_width reference) ++ "x" ++ show (image_height reference))
+    _ ⇒ do
+      putStrLn "usage: verify-source control|power RAW_PNM_DIRECTORY REFERENCE.pnm SOURCES.pnm"
+      exitFailure

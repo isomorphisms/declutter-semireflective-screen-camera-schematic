@@ -1,0 +1,20 @@
+identity	value
+job	SUN-RETECH-INDEPENDENT-FIDELITY-VERIFICATION-01
+baseline_source_revision	8145063ef13e3ddcda3284ed2ea7ccf6b6595b90
+tested_output_revision	8145063ef13e3ddcda3284ed2ea7ccf6b6595b90
+implementation_revision	ae01fc36a103ab34c781637f99806e320fbe5388
+implementation_binding	Compiled/tested working-tree source is byte-identical to this commit; source-executables-manifests.sha256 rechecked after commit
+compiler_revision	2bce7677f513d711875e978bd6f5ad28b9e54d58
+compiler_route	Existing maintained edric bootstrap; explicit --cg chez
+host	Debian13.6 Linux x86-64
+chez_version	10.4.1
+verifier_version	coverage-v1; baseline direct-neighbourhood arithmetic32/8/0
+optical_candidate	UNCHANGED v3 baseline; no new optical implementation
+first_slice	PASS; full fidelity PARTIAL; broader1718 label relation FAIL
+input_safety	FAIL; collision production repair assigned existing Earth owner
+public_images	NONE
+private_native_crop_bundle_sha256	1e512adc66f31f957cbe06ae8b2a818314a8e51772847393469d6ed3f945f506
+human_verification	NONE; agent original-image observations explicitly labelled
+ci	No Actions run at inspected baseline; host execution only
+merge	FORBIDDEN; keep existing PR draft
+receipt_only_followup	This file is a receipt-only addition after tested implementation commit

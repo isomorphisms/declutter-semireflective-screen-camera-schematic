@@ -1,0 +1,144 @@
+module PaperMeshTests
+
+import Data.Text
+import PaperMesh
+import PaperReplay
+import SchematicRaster
+import System
+import System.File
+
+covering
+fail_with : Text → IO value
+fail_with message = do
+  putStrLn ("FAIL: " ++ message)
+  exitFailure
+
+covering
+check : Text → Bool → IO ()
+check label True = putStrLn ("PASS: " ++ label)
+check label False = fail_with label
+
+covering
+require_right : Either Text value → IO value
+require_right (Right value) = pure value
+require_right (Left message) = fail_with message
+
+covering
+expect_left : Text → Either Text value → IO ()
+expect_left label (Left _) = check label True
+expect_left label (Right _) = fail_with label
+
+source_lines : Text
+source_lines = "source 5 first.ppm 4 4 5d601c40beb9d426d574df995ff1bda840c3e4665cea9890bb32f081a04b538b\n" ++
+               "source 8 second.ppm 4 4 49e8706df9622b3a334d40ce6f07f8c896cb42b0ad4404b7fd972884cff65e82\n"
+
+left_faces : Text
+left_faces = "triangle 5 0 0 0 0 4 0 4 0 4 4 4 4\n" ++
+             "triangle 5 0 0 0 0 4 4 4 4 0 4 0 4\n"
+
+right_faces : Text
+right_faces = "triangle 8 4 0 0 0 8 0 4 0 8 4 4 4\n" ++
+              "triangle 8 4 0 0 0 8 4 4 4 4 4 0 4\n"
+
+fixture : Text
+fixture = "paper-mesh-v1 8 4\n" ++ source_lines ++ left_faces ++ right_faces
+
+covering
+write_text : Text → Text → IO ()
+write_text path text = do
+  Right () ← writeFile path text
+    | Left error ⇒ fail_with (show error)
+  pure ()
+
+covering
+expect_sample : Text → Image → Int → Int → Pixel → IO ()
+expect_sample label image column row expected = do
+  Just actual ← pixel_at image column row
+    | Nothing ⇒ fail_with label
+  check label (actual.red ≟ expected.red && actual.green ≟ expected.green && actual.blue ≟ expected.blue)
+
+covering
+parser_and_geometry : IO ()
+parser_and_geometry = do
+  _ ← require_right (parse_mesh fixture)
+  check "two explicitly grouped photographs admitted" True
+  expect_left "empty plan rejected" (parse_mesh "")
+  expect_left "unknown directive rejected" (parse_mesh (fixture ++ "infer-label 24V\n"))
+  expect_left "duplicate source identity rejected" (parse_mesh (fixture ++ source_lines))
+  expect_left "unbounded dimension rejected" (parse_mesh ("paper-mesh-v1 999999999999 4\n" ++ source_lines ++ left_faces))
+  expect_left "source traversal rejected" (parse_mesh
+    "paper-mesh-v1 8 4\nsource 5 ../first.ppm 4 4 5d601c40beb9d426d574df995ff1bda840c3e4665cea9890bb32f081a04b538b\n")
+  expect_left "unknown source reference rejected" (parse_mesh ("paper-mesh-v1 8 4\n" ++ source_lines ++
+    "triangle 6 0 0 0 0 4 0 4 0 4 4 4 4\n"))
+  expect_left "degenerate triangle rejected" (parse_mesh ("paper-mesh-v1 8 4\n" ++ source_lines ++
+    "triangle 5 0 0 0 0 2 2 2 2 4 4 4 4\n"))
+  expect_left "reflected original triangle rejected" (parse_mesh ("paper-mesh-v1 8 4\n" ++ source_lines ++
+    "triangle 5 0 0 0 0 4 0 0 4 4 4 4 0\n"))
+  expect_left "original coordinate beyond source rejected" (parse_mesh ("paper-mesh-v1 8 4\n" ++ source_lines ++
+    "triangle 5 0 0 0 0 4 0 5 0 4 4 4 4\n"))
+  expect_left "gap beyond canvas rejected" (parse_mesh (fixture ++ "gap 7 0 2 4\n"))
+  let face = Triangle 1 (MeshAt 0 0) (MeshAt 0 0) (MeshAt 8 0) (MeshAt 4 0)
+                         (MeshAt 8 8) (MeshAt 4 4)
+  case sample_coordinate face (MeshAt 5 2) of
+    Nothing ⇒ fail_with "rational scale has no sample"
+    Just point ⇒ check "integer rational interpolation and half tie" (point.column ≟ 3 && point.row ≟ 1)
+  check "huge coordinate rejected before multiplication"
+    (case sample_coordinate face (MeshAt 9223372036854775807 0) of Nothing ⇒ True; _ ⇒ False)
+  let folded = Triangle 1 (MeshAt 0 0) (MeshAt 0 0) (MeshAt 8 0) (MeshAt 0 4)
+                           (MeshAt 8 8) (MeshAt 4 0)
+  check "foldover does not become a valid local panel" (not (face_geometry folded))
+
+covering
+image_checks : Text → IO ()
+image_checks directory = do
+  write_text (directory ++ "/first.ppm") "P6\n4 4\n255\nABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv"
+  write_text (directory ++ "/second.ppm") "P6\n4 4\n255\n0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl"
+  let manifest_path = directory ++ "/plan.tsv"
+  let output_path = directory ++ "/sheet.pnm"
+  write_text manifest_path fixture
+  _ ← render_mesh manifest_path fixture directory output_path >>= require_right
+  output ← read_ppm output_path >>= require_right
+  source_x ← read_ppm (output_path ++ ".x.pnm") >>= require_right
+  source_y ← read_ppm (output_path ++ ".y.pnm") >>= require_right
+  plan ← require_right (parse_mesh fixture)
+  originals ← load_sources directory plan.sources >>= require_right
+  check "non-square mosaic shape" (image_width output ≟ 8 && image_height output ≟ 4)
+  expect_sample "first photograph exact RGB" output 0 0 (RGB 65 66 67)
+  expect_sample "second photograph exact RGB" output 4 0 (RGB 48 49 50)
+  expect_sample "last source row retained" output 3 3 (RGB 116 117 118)
+  expect_sample "source-x records ID and native coordinate" source_x 7 3 (RGB 8 3 0)
+  expect_sample "source-y records ID and native coordinate" source_y 7 3 (RGB 8 3 0)
+  _ ← replay_images plan originals output source_x source_y >>= require_right
+  check "independent full original-pixel replay" True
+  _ ← put_pixel output 1 1 (RGB 0 0 0)
+  replay_images plan originals output source_x source_y >>= expect_left "one altered output pixel rejected"
+  output_again ← read_ppm output_path >>= require_right
+  _ ← put_pixel source_x 1 1 (RGB 9 1 0)
+  replay_images plan originals output_again source_x source_y >>= expect_left "disagreeing source identities rejected"
+  x_again ← read_ppm (output_path ++ ".x.pnm") >>= require_right
+  _ ← put_pixel x_again 1 1 (RGB 5 255 255)
+  replay_images plan originals output_again x_again source_y >>= expect_left "out-of-frame source-map coordinate rejected"
+  let gapped = fixture ++ "gap 3 0 2 4\n"
+  write_text (directory ++ "/gap.tsv") gapped
+  _ ← render_mesh (directory ++ "/gap.tsv") gapped directory (directory ++ "/gap.pnm") >>= require_right
+  gap_output ← read_ppm (directory ++ "/gap.pnm") >>= require_right
+  expect_sample "unsupported seam remains visibly unknown" gap_output 3 2 (RGB 232 232 232)
+  let overlap = fixture ++ left_faces
+  write_text (directory ++ "/overlap.tsv") overlap
+  render_mesh (directory ++ "/overlap.tsv") overlap directory (directory ++ "/overlap.pnm") >>=
+    expect_left "overlapping destination claims rejected"
+  render_mesh manifest_path fixture directory output_path >>= expect_left "existing output is not replaced"
+  render_mesh manifest_path fixture directory (directory ++ "/first.ppm") >>= expect_left "original cannot be an output"
+  write_text (directory ++ "/first.ppm") "P6\n4 4\n255\nZBCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv"
+  render_mesh manifest_path fixture directory (directory ++ "/wrong-source.pnm") >>= expect_left "wrong original digest rejected"
+  putStrLn "PASS: paper mesh arithmetic, original sampling, replay and negative controls"
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, directory] ⇒ do
+      parser_and_geometry
+      image_checks directory
+    _ ⇒ fail_with "usage: paper-mesh-tests EXISTING_EMPTY_DIRECTORY"

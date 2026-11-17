@@ -1,0 +1,144 @@
+module RasterTests
+
+import Data.List
+import Data.Text
+import SchematicRaster
+import System
+import System.File
+
+covering
+fail_with : Text → IO value
+fail_with message = do
+  putStrLn ("FAIL: " ++ message)
+  exitFailure
+
+covering
+require_right : Either Text value → IO value
+require_right (Left message) = fail_with message
+require_right (Right value) = pure value
+
+covering
+check : Text → Bool → IO ()
+check label True = putStrLn ("PASS: " ++ label)
+check label False = fail_with label
+
+same_pixel : Pixel → Pixel → Bool
+same_pixel left right =
+  left.red ≟ right.red && left.green ≟ right.green && left.blue ≟ right.blue
+
+covering
+expect_pixel : Text → Image → Int → Int → Pixel → IO ()
+expect_pixel label image x y expected = do
+  Just actual ← pixel_at image x y
+    | Nothing ⇒ fail_with (label ++ ": coordinate was rejected")
+  check label (same_pixel actual expected)
+
+covering
+write_fixture : Text → Text → IO ()
+write_fixture path bytes = do
+  Right () ← writeFile path bytes
+    | Left error ⇒ fail_with ("fixture write failed: " ++ show error)
+  pure ()
+
+covering
+reject_fixture : Text → Text → Text → IO ()
+reject_fixture label path bytes = do
+  write_fixture path bytes
+  result ← read_ppm path
+  case result of
+    Left _ ⇒ check label True
+    Right _ ⇒ check label False
+
+covering
+check_admission : Text → IO ()
+check_admission directory = do
+  let path = directory ++ "/admission.ppm"
+  write_fixture path "P6\n# a legal comment\n3 2\n255\nABCDEFGHIJKLMNOPQR"
+  image ← read_ppm path >>= require_right
+  check "non-square input dimensions" (image_width image ≟ 3 && image_height image ≟ 2)
+  expect_pixel "RGB row-major indexing across rows" image 2 1 (RGB 80 81 82)
+  missing ← pixel_at image 3 0
+  case missing of
+    Nothing ⇒ check "right boundary rejected" True
+    Just _ ⇒ check "right boundary rejected" False
+  missing_negative ← pixel_at image 0 (-1)
+  case missing_negative of
+    Nothing ⇒ check "negative row rejected" True
+    Just _ ⇒ check "negative row rejected" False
+  rejected_write ← put_pixel image 0 2 black
+  check "bottom boundary write rejected" (not rejected_write)
+  expect_pixel "rejected write did not alter input" image 2 1 (RGB 80 81 82)
+  Right () ← write_ppm (directory ++ "/roundtrip.ppm") image
+    | Left message ⇒ fail_with message
+  roundtrip ← read_ppm (directory ++ "/roundtrip.ppm") >>= require_right
+  expect_pixel "P6 write/read retains channel order" roundtrip 2 1 (RGB 80 81 82)
+  write_fixture path "P6\n1 1\n255\n \t\n"
+  whitespace_pixel ← read_ppm path >>= require_right
+  expect_pixel "whitespace-valued first pixel remains payload" whitespace_pixel 0 0 (RGB 32 9 10)
+  reject_fixture "truncated RGB payload rejected" path "P6\n1 1\n255\nAB"
+  reject_fixture "trailing RGB payload rejected" path "P6\n1 1\n255\nABCD"
+  reject_fixture "zero image width rejected" path "P6\n0 1\n255\n"
+  reject_fixture "16-bit sample format rejected" path "P6\n1 1\n65535\nABCDEF"
+  reject_fixture "non-binary PNM rejected" path "P3\n1 1\n255\n1 2 3\n"
+  reject_fixture "oversize header comment rejected" path
+    ("P6\n#" ++ pack (replicate 4097 'a') ++ "\n1 1\n255\nABC")
+
+covering
+check_copy : IO ()
+check_copy = do
+  image ← new_image 3 2 >>= require_right
+  _ ← put_pixel image 0 0 (RGB 11 22 33)
+  _ ← put_pixel image 1 0 (RGB 44 55 66)
+  _ ← put_pixel image 2 0 (RGB 77 88 99)
+  copied ← copy_rectangle image image 0 0 2 1 1 0
+  _ ← require_right copied
+  expect_pixel "overlapping copy retains first source pixel" image 1 0 (RGB 11 22 33)
+  expect_pixel "overlapping copy stages second source pixel" image 2 0 (RGB 44 55 66)
+  cropped ← crop_image image 1 0 2 1 >>= require_right
+  check "crop dimensions" (image_width cropped ≟ 2 && image_height cropped ≟ 1)
+  expect_pixel "crop preserves exact RGB sample" cropped 1 0 (RGB 44 55 66)
+  invalid ← copy_rectangle image image 2 0 2 1 0 0
+  case invalid of
+    Left _ ⇒ check "copy source extent rejected" True
+    Right _ ⇒ check "copy source extent rejected" False
+  huge_source ← copy_rectangle image image 9223372036854775807 0 2 1 0 0
+  case huge_source of
+    Left _ ⇒ check "overflow-sized source origin rejected" True
+    Right _ ⇒ check "overflow-sized source origin rejected" False
+  huge_target ← copy_rectangle image image 0 0 2 1 9223372036854775807 0
+  case huge_target of
+    Left _ ⇒ check "overflow-sized target origin rejected" True
+    Right _ ⇒ check "overflow-sized target origin rejected" False
+  expect_pixel "rejected copy leaves target unchanged" image 0 0 (RGB 11 22 33)
+
+covering
+check_enhancement : IO ()
+check_enhancement = do
+  let contrast = LocalContrast 1 1 0
+  check "constant sample normalizes to white" (normalize_sample contrast 100 100 ≟ 255)
+  check "dark contrast arithmetic" (normalize_sample contrast 120 100 ≟ 235)
+  check "bright samples clip to white" (normalize_sample contrast 100 120 ≟ 255)
+  check "large gain clips at black" (normalize_sample (LocalContrast 1 16 0) 255 0 ≟ 0)
+  check "invalid radius rejected" (not (valid_parameters (LocalContrast 0 1 0)))
+  check "invalid gain rejected" (not (valid_parameters (LocalContrast 1 0 0)))
+  image ← new_image 3 3 >>= require_right
+  accepted ← put_pixel image 1 1 black
+  check "fixture center write" accepted
+  result ← enhance image contrast >>= require_right
+  check "enhancement preserves dimensions" (image_width result ≟ 3 && image_height result ≟ 3)
+  -- Eight white samples and one black sample have integer mean 226.
+  expect_pixel "independent 3×3 local-mean result" result 1 1 (RGB 29 29 29)
+  expect_pixel "corner rectangle clips within source bounds" result 0 0 white
+  expect_pixel "enhancement does not mutate the source" image 1 1 black
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, directory] ⇒ do
+      check_admission directory
+      check_copy
+      check_enhancement
+      putStrLn "PASS: raster admission, copy, and local-contrast acceptance"
+    _ ⇒ fail_with "usage: raster-tests EXISTING_TEMPORARY_DIRECTORY"

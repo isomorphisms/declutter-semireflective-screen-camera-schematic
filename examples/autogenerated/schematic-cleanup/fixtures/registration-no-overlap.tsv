@@ -1,0 +1,7 @@
+canvas 110 3
+earlier first.ppm 0 0 3 2
+later second.ppm 0 0 3 2
+similarity 1000000 0 100000000 0
+origin 0 0
+seam 1
+gap 0

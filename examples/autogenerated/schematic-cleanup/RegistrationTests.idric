@@ -1,0 +1,193 @@
+module RegistrationTests
+
+import Registration
+import SchematicRaster
+import Data.Text
+import System
+import System.File
+
+covering
+fail_with : Text → IO value
+fail_with message = do
+  putStrLn ("FAIL: " ++ message)
+  exitFailure
+
+covering
+check : Text → Bool → IO ()
+check message True = putStrLn ("PASS: " ++ message)
+check message False = fail_with message
+
+covering
+require_right : Either Text value → IO value
+require_right (Right value) = pure value
+require_right (Left message) = fail_with message
+
+covering
+expect_left : Text → Either Text value → IO ()
+expect_left label (Left _) = check label True
+expect_left label (Right _) = check label False
+
+same_point : PixelPoint → PixelPoint → Bool
+same_point first second =
+  first.column ≟ second.column && first.row ≟ second.row
+
+covering
+expect_point : Text → Either Text PixelPoint → PixelPoint → IO ()
+expect_point label result expected = do
+  actual ← require_right result
+  check label (same_point actual expected)
+
+covering
+expect_pixel : Text → Image → Int → Int → Pixel → IO ()
+expect_pixel label image column row expected = do
+  Just actual ← pixel_at image column row
+    | Nothing ⇒ fail_with (label ++ ": missing pixel")
+  check label (actual.red ≟ expected.red && actual.green ≟ expected.green &&
+               actual.blue ≟ expected.blue)
+
+fixture_plan : Text
+fixture_plan = "canvas 5 3\nearlier first.ppm 0 0 3 2\nlater second.ppm 0 0 3 2\nsimilarity 1000000 0 1000000 0\norigin -1 0\nseam 1\ngap 0\n"
+
+plan_with : Text → Text → Text → Text → Text → Text → Text → Text
+plan_with frame earlier later transformation origin seam gap =
+  frame ++ "\n" ++ earlier ++ "\n" ++ later ++ "\n" ++ transformation ++
+  "\n" ++ origin ++ "\n" ++ seam ++ "\n" ++ gap ++ "\n"
+
+covering
+arithmetic_checks : IO ()
+arithmetic_checks = do
+  let identity = ScaleAndTurn 1000000 0 0 0
+  let quarter_turn = ScaleAndTurn 0 1000000 4000000 0
+  check "identity admitted" (valid_similarity identity)
+  check "zero determinant refused" (not (valid_similarity (ScaleAndTurn 0 0 0 0)))
+  check "maximum signed coefficient refused before squaring"
+    (not (valid_similarity (ScaleAndTurn 9223372036854775807 0 0 0)))
+  check "minimum signed coefficient refused without abs overflow"
+    (not (valid_similarity (ScaleAndTurn (-9223372036854775808) 0 0 0)))
+  expect_point "independent quarter-turn forward coordinate"
+    (forward_point quarter_turn (PointAt 2 1)) (PointAt 3 2)
+  expect_point "independent quarter-turn inverse coordinate"
+    (inverse_point quarter_turn (PointAt 3 2)) (PointAt 2 1)
+  expect_point "negative nearest-neighbour tie rounds away from zero"
+    (forward_point (ScaleAndTurn 500000 0 0 0) (PointAt (-3) 4)) (PointAt (-2) 2)
+  expect_point "negative origin retains conventional axes"
+    (inverse_point (ScaleAndTurn 1000000 0 (-2000000) 3000000) (PointAt (-1) 2))
+    (PointAt 1 (-1))
+  expect_point "largest admitted coordinates remain exact under identity"
+    (inverse_point identity (PointAt (-65536) 65536)) (PointAt (-65536) 65536)
+  expect_left "overflow-sized point refused"
+    (inverse_point identity (PointAt 9223372036854775807 0))
+  expect_left "zero inverse refused explicitly"
+    (inverse_point (ScaleAndTurn 0 0 0 0) (PointAt 0 0))
+  let source = PointAt 558 1030
+  let shifted = ScaleAndTurn 1053400 8200 56506600 (-674696800)
+  forward ← require_right (forward_point shifted source)
+  back ← require_right (inverse_point shifted forward)
+  check "photographic fixed-point roundtrip within one native pixel"
+    (abs (back.column - source.column) <= 1 && abs (back.row - source.row) <= 1)
+
+covering
+parser_checks : IO ()
+parser_checks = do
+  _ ← require_right (parse_plan fixture_plan)
+  check "known-good seven-directive plan admitted" True
+  let valid_region = "earlier first.ppm 0 0 3 2"
+  let later_region = "later second.ppm 0 0 3 2"
+  let identity = "similarity 1000000 0 0 0"
+  let make = \frame, region, transform, origin, seam, gap ⇒
+        parse_plan (plan_with frame region later_region transform origin seam gap)
+  expect_left "negative canvas rejected"
+    (make "canvas -1 3" valid_region identity "origin 0 0" "seam 1" "gap 0")
+  expect_left "unsupported side length rejected"
+    (make "canvas 32769 3" valid_region identity "origin 0 0" "seam 1" "gap 0")
+  expect_left "unsupported pixel count rejected"
+    (make "canvas 32768 32768" valid_region identity "origin 0 0" "seam 1" "gap 0")
+  expect_left "negative region coordinate rejected"
+    (make "canvas 5 3" "earlier first.ppm -1 0 3 2" identity "origin 0 0" "seam 1" "gap 0")
+  expect_left "path traversal rejected"
+    (make "canvas 5 3" "earlier ../first.ppm 0 0 3 2" identity "origin 0 0" "seam 1" "gap 0")
+  expect_left "duplicate source identity rejected"
+    (make "canvas 5 3" "earlier second.ppm 0 0 3 2" identity "origin 0 0" "seam 1" "gap 0")
+  expect_left "huge decimal coefficient rejected before casting"
+    (make "canvas 5 3" valid_region "similarity 99999999999999999999999999999999999999 0 0 0" "origin 0 0" "seam 1" "gap 0")
+  expect_left "singular plan rejected"
+    (make "canvas 5 3" valid_region "similarity 0 0 0 0" "origin 0 0" "seam 1" "gap 0")
+  expect_left "seam outside canvas rejected"
+    (make "canvas 5 3" valid_region identity "origin 0 0" "seam 3" "gap 0")
+  expect_left "unbounded output origin rejected"
+    (make "canvas 5 3" valid_region identity "origin -32769 0" "seam 1" "gap 0")
+  expect_left "negative seam gap rejected"
+    (make "canvas 5 3" valid_region identity "origin 0 0" "seam 1" "gap -1")
+  expect_left "missing directive rejected" (parse_plan "canvas 5 3\n")
+  expect_left "extra directive rejected" (parse_plan (fixture_plan ++ "unexpected 1\n"))
+
+covering
+image_checks : Text → IO ()
+image_checks directory = do
+  Right () ← writeFile (directory ++ "/first.ppm") "P6\n3 2\n255\nABCDEFGHIJKLMNOPQR"
+    | Left error ⇒ fail_with (show error)
+  Right () ← writeFile (directory ++ "/second.ppm") "P6\n3 2\n255\nabcdefghijklmnopqr"
+    | Left error ⇒ fail_with (show error)
+  first ← read_ppm (directory ++ "/first.ppm") >>= require_right
+  second ← read_ppm (directory ++ "/second.ppm") >>= require_right
+  plan ← require_right (parse_plan fixture_plan)
+  _ ← render_plan plan first second (directory ++ "/registered.pnm") >>= require_right
+  result ← read_ppm (directory ++ "/registered.pnm") >>= require_right
+  source_map ← read_ppm (directory ++ "/registered.pnm.sources.pnm") >>= require_right
+  check "non-square output dimensions" (image_width result ≟ 5 && image_height result ≟ 3)
+  expect_pixel "unobserved negative anchor is grey" result 0 0 (RGB 232 232 232)
+  expect_pixel "earlier-preferred fallback selects later exact RGB" result 1 0 (RGB 97 98 99)
+  expect_pixel "earlier row preserves RGB identity" result 2 0 (RGB 65 66 67)
+  expect_pixel "earlier last column preserves row-major RGB" result 4 0 (RGB 71 72 73)
+  expect_pixel "later row is selected below seam" result 1 1 (RGB 106 107 108)
+  expect_pixel "later-preferred fallback selects earlier exact RGB" result 4 1 (RGB 80 81 82)
+  expect_pixel "unobserved last row remains grey" result 2 2 (RGB 232 232 232)
+  expect_pixel "map records unknown" source_map 0 0 (RGB 0 0 0)
+  expect_pixel "map records earlier" source_map 2 0 (RGB 1 1 1)
+  expect_pixel "map records later fallback" source_map 1 0 (RGB 2 2 2)
+  case selection_at plan (PointAt 4 1) of
+    from_earlier point ⇒ check "map replays exact source coordinate" (same_point point (PointAt 2 1))
+    _ ⇒ fail_with "wrong provenance identity"
+  let disjoint = plan_with "canvas 110 3" "earlier first.ppm 0 0 3 2"
+        "later second.ppm 0 0 3 2" "similarity 1000000 0 100000000 0"
+        "origin 0 0" "seam 1" "gap 0"
+  bad_overlap ← require_right (parse_plan disjoint)
+  rejected ← render_plan bad_overlap first second (directory ++ "/must-not-exist.pnm")
+  expect_left "incorrect geometric overlap assumption rejected" rejected
+  let invalid_region = { earlier := FromPhotograph "first.ppm" 1 0 3 2 } plan
+  rejected_region ← render_plan invalid_region first second (directory ++ "/must-not-exist.pnm")
+  expect_left "rectangle outside actual source rejected" rejected_region
+  let gapped = { seam_gap := 1 } plan
+  _ ← render_plan gapped first second (directory ++ "/gap.pnm") >>= require_right
+  gap_image ← read_ppm (directory ++ "/gap.pnm") >>= require_right
+  expect_pixel "explicit unknown seam prevents fabricated connection" gap_image 2 1 (RGB 232 232 232)
+  earlier_mask ← new_image 3 2 >>= require_right
+  later_mask ← new_image 3 2 >>= require_right
+  _ ← put_pixel earlier_mask 0 0 (RGB 0 0 0)
+  _ ← put_pixel later_mask 1 0 (RGB 17 17 17)
+  _ ← render_masked_plan plan first second earlier_mask later_mask
+        (directory ++ "/masked.pnm") >>= require_right
+  masked_result ← read_ppm (directory ++ "/masked.pnm") >>= require_right
+  masked_map ← read_ppm (directory ++ "/masked.pnm.sources.pnm") >>= require_right
+  expect_pixel "occluded preferred source falls back to observed alternate"
+    masked_result 2 0 (RGB 100 101 102)
+  expect_pixel "recovered pixel retains original photograph identity"
+    masked_map 2 0 (RGB 17 17 17)
+  expect_pixel "two excluded observations remain explicitly unknown"
+    masked_result 3 0 (RGB 232 232 232)
+  wrong_shape ← new_image 2 3 >>= require_right
+  invalid_map ← render_masked_plan plan first second wrong_shape later_mask
+                 (directory ++ "/must-not-exist.pnm")
+  expect_left "transposed source-selection map shape rejected" invalid_map
+  putStrLn "PASS: registration source identity, coordinates and negative controls"
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, directory] ⇒ do
+      arithmetic_checks
+      parser_checks
+      image_checks directory
+    _ ⇒ fail_with "usage: registration-tests EXISTING_FIXTURE_DIRECTORY"

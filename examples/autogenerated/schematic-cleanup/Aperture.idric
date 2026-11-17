@@ -1,0 +1,180 @@
+module Aperture
+
+import Data.List
+import Data.Text
+import SchematicRaster
+import RunPaths
+import System
+import System.File
+
+-- Describe observed glass boundaries and HMI occlusions above pixel copying.
+record Corner where
+  constructor AtCorner
+  column : Int
+  row : Int
+
+record Occlusion where
+  constructor BehindControl
+  corners : List Corner
+
+record ObservationWindow where
+  constructor ThroughGlass
+  source_id : Int
+  columns : Int
+  rows : Int
+  corners : List Corner
+  occlusions : List Occlusion
+
+coordinate : Text → Either Text Int
+coordinate text = case parseInteger {a = Integer} text of
+  Just value ⇒ if value >= 0 && value <= 32768
+                  then Right (cast value) else Left "mask coordinate outside admitted range"
+  Nothing ⇒ Left "mask coordinate is not an integer"
+
+parse_occlusion : Text → Either Text Occlusion
+parse_occlusion line = case words line of
+  ["exclude", x, y, width, height] ⇒ do
+    left ← coordinate x
+    top ← coordinate y
+    columns ← coordinate width
+    rows ← coordinate height
+    if columns > 0 && rows > 0
+       then Right (BehindControl [AtCorner left top, AtCorner (left + columns - 1) top,
+                   AtCorner (left + columns - 1) (top + rows - 1),
+                   AtCorner left (top + rows - 1)])
+       else Left "occlusion must have positive extent"
+  ["triangle", x0, y0, x1, y1, x2, y2] ⇒ do
+    first_x ← coordinate x0
+    first_y ← coordinate y0
+    second_x ← coordinate x1
+    second_y ← coordinate y1
+    third_x ← coordinate x2
+    third_y ← coordinate y2
+    Right (BehindControl [AtCorner first_x first_y, AtCorner second_x second_y,
+                          AtCorner third_x third_y])
+  _ ⇒ Left "expected exclude LEFT TOP WIDTH HEIGHT or triangle X0 Y0 X1 Y1 X2 Y2"
+
+turn : Corner → Corner → Corner → Int
+turn first second point =
+  (second.column - first.column) × (point.row - first.row) -
+  (second.row - first.row) × (point.column - first.column)
+
+convex : List Corner → Bool
+convex [first, second, third] = turn first second third > 0
+convex [first, second, third, fourth] =
+  all (> 0) [turn first second third, turn second third fourth,
+             turn third fourth first, turn fourth first second]
+convex _ = False
+
+parse_window : Text → Either Text ObservationWindow
+parse_window text = case filter (\line ⇒ trim line /= "" && not (isPrefixOf "#" (trim line))) (lines text) of
+  photo :: glass :: exclusions ⇒ case (words photo, words glass) of
+    (["photo", identity, width, height],
+     ["glass", x0, y0, x1, y1, x2, y2, x3, y3]) ⇒ do
+      source_id ← coordinate identity
+      columns ← coordinate width
+      rows ← coordinate height
+      first_x ← coordinate x0
+      first_y ← coordinate y0
+      second_x ← coordinate x1
+      second_y ← coordinate y1
+      third_x ← coordinate x2
+      third_y ← coordinate y2
+      fourth_x ← coordinate x3
+      fourth_y ← coordinate y3
+      occlusions ← traverse parse_occlusion exclusions
+      let first = AtCorner first_x first_y
+      let second = AtCorner second_x second_y
+      let third = AtCorner third_x third_y
+      let fourth = AtCorner fourth_x fourth_y
+      let corners = [first, second, third, fourth]
+      if source_id < 1 || source_id >= 232 || columns < 1 || rows < 1 ||
+         columns × rows > 40000000 ||
+         not (all (\point ⇒ point.column < columns && point.row < rows) corners) ||
+         not (all (> 0) [turn first second third, turn second third fourth,
+                         turn third fourth first, turn fourth first second]) ||
+         not (all (\hidden ⇒ convex hidden.corners &&
+                   all (\point ⇒ point.column < columns && point.row < rows)
+                       hidden.corners) occlusions)
+         then Left "invalid source identity, shape, convex glass polygon or occlusion bounds"
+         else Right (ThroughGlass source_id columns rows corners occlusions)
+    _ ⇒ Left "expected photo ID WIDTH HEIGHT and glass X0 Y0 X1 Y1 X2 Y2 X3 Y3"
+  _ ⇒ Left "observation window requires photo and glass directives"
+
+inside_glass : List Corner → Corner → Bool
+inside_glass [first, second, third, fourth] point =
+  turn first second point >= 0 && turn second third point >= 0 &&
+  turn third fourth point >= 0 && turn fourth first point >= 0
+inside_glass [first, second, third] point =
+  turn first second point >= 0 && turn second third point >= 0 &&
+  turn third first point >= 0
+inside_glass _ _ = False
+
+visible : ObservationWindow → Corner → Bool
+visible window point =
+  inside_glass window.corners point &&
+  not (any (\hidden ⇒ inside_glass hidden.corners point) window.occlusions)
+
+covering
+mask_observation : ObservationWindow → Image → Text → IO (Either Text ())
+mask_observation window source destination =
+  if image_width source /= window.columns || image_height source /= window.rows
+     then pure (Left "source shape differs from the declared observation")
+     else do
+       Right () ← admit_run [] [destination, destination ++ ".sources.pnm"]
+         | Left message ⇒ pure (Left message)
+       Right output ← new_image window.columns window.rows
+         | Left message ⇒ pure (Left message)
+       Right identities ← new_image window.columns window.rows
+         | Left message ⇒ pure (Left message)
+       Right () ← for_indices_result (cast window.rows) 0 $ \row ⇒
+         for_indices_result (cast window.columns) 0 $ \column ⇒ do
+           let retained = visible window (AtCorner column row)
+           Just observed ← pixel_at source column row
+             | Nothing ⇒ pure (Left "source position was rejected")
+           let sample = if retained then observed else RGB 232 232 232
+           let identity = if retained then cast window.source_id else 0
+           written ← put_pixel output column row sample
+           mapped ← put_pixel identities column row (RGB identity identity identity)
+           if written && mapped then pure (Right ())
+                                else pure (Left "output position was rejected")
+         | Left message ⇒ pure (Left message)
+       Right () ← write_ppm destination output
+         | Left message ⇒ pure (Left message)
+       write_ppm (destination ++ ".sources.pnm") identities
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, mask_path, source_path, destination] ⇒ do
+      Right () ← admit_run [mask_path, source_path] [destination, destination ++ ".sources.pnm"]
+        | Left message ⇒ do
+            putStrLn ("FAIL: " ++ message)
+            exitFailure
+      if source_path ≟ destination
+         then do
+           putStrLn "FAIL: output must differ from source"
+           exitFailure
+         else do
+           Right text ← readFile mask_path
+             | Left error ⇒ do
+                 putStrLn ("FAIL: " ++ show error)
+                 exitFailure
+           Right window ← pure (parse_window text)
+             | Left message ⇒ do
+                 putStrLn ("FAIL: " ++ message)
+                 exitFailure
+           Right source ← read_ppm source_path
+             | Left message ⇒ do
+                 putStrLn ("FAIL: " ++ message)
+                 exitFailure
+           Right () ← mask_observation window source destination
+             | Left message ⇒ do
+                 putStrLn ("FAIL: " ++ message)
+                 exitFailure
+           putStrLn ("PASS: preserved observed glass pixels and marked occluded pixels: " ++ destination)
+    _ ⇒ do
+      putStrLn "usage: aperture WINDOW.tsv INPUT.pnm OUTPUT.pnm"
+      exitFailure

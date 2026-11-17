@@ -1,0 +1,4 @@
+PASS	independent mean-floor, clipping and extreme-byte fixtures
+PASS	direct non-square clipped corner: floor(3*255/4)=191
+PASS	unsupported radius rejected before neighbourhood arithmetic
+PASS	baseline-32-8-0-direct-neighbourhoods	6 RGB points; preservation checked separately

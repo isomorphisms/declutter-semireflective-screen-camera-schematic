@@ -1,0 +1,6 @@
+module UnicodeMinus
+
+-- Compiler-boundary probe: the canonical style requests this notation.
+-- Its observed acceptance result belongs in the accompanying attempt record.
+subtract_values : Int → Int → Int
+subtract_values left right = left − right

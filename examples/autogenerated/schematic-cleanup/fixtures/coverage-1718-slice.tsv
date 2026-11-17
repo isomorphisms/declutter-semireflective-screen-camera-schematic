@@ -1,0 +1,16 @@
+# Positive slice frozen from original L terminal marking. Does not suppress the
+# separately required FAIL of coverage-1718.tsv on the 24V-DC stroke.
+version coverage-v1
+source 18 photograph 1152 1536 6f9648c84450a79e496000092965321b9cc50ab56191e7b73fb356847bd3f7c5 27c8874bbf9f16792bda9b0742c96966e1755366acb154b39b188aa4331fe17f
+target control output 2448 3903 0 2518 37673362ab3887f431e646cd01392513697ddc87e645b63a10bc7cae09e8ea9b 8145063ef13e3ddcda3284ed2ea7ccf6b6595b90
+review agent-original-inspection
+witness supply-N-fragment wire-segment observed 510 1070 70 20 original-1718-horizontal-red-fragment-right-of-N 1714-arrangement-only-no-pixel-fusion
+probe supply-N-fragment 520 1082 520 1075 1 69 56 50 94 94 84
+probe supply-N-fragment 540 1082 540 1075 1 77 58 51 98 94 85
+probe supply-N-fragment 570 1082 570 1075 1 87 71 58 109 105 93
+witness supply-L-mark terminal-mark observed 498 1044 22 22 original-1718-L-terminal-letter-no-identity-beyond-visible-L none
+probe supply-L-mark 504 1051 514 1051 0 68 71 64 101 101 91
+probe supply-L-mark 503 1060 513 1060 0 81 84 77 98 100 89
+witness supply-glare-connection wire-endpoint ambiguous 700 1070 90 20 hand-overlaps-wire-no-endpoint-or-continuity-assertion 1714-no-qualified-correspondence
+witness hand-contour contamination observed 700 1110 40 40 original-hand-reflection-not-schematic none
+witness supply-hidden-terminal terminal-mark unobserved 760 1110 40 30 no-legible-identity-asserted none

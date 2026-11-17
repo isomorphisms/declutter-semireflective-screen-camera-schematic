@@ -1,0 +1,7 @@
+pair	landmarks	max_fit_residual_pixels	max_leave_one_out_residual_pixels	decision	coefficient_unit
+1712-1713	1	NA	NA	REFUSE: insufficient landmarks	1000000
+1713-1718	3	5.3	18.3	REFUSE: unstable leave-one-out	1000000
+1715-1716	3	4.6	17.9	REFUSE: near-collinear and unstable	1000000
+1716-1717	6	4.3	6.4	TRIAL: source-selected alignment	1000000
+1720-1723	7	6.1	8.2	TRIAL: source-selected alignment	1000000
+1721-1722	4	3.9	8.4	TRIAL: source-selected alignment	1000000

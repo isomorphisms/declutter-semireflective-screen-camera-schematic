@@ -1,0 +1,14 @@
+boundary	result	evidence
+Idriç/Chez compilation	PASS	PhotoReview.idric and PhotoReviewTests.idric through compiler 2bce7677f513d711875e978bd6f5ad28b9e54d58
+focused host execution	PASS	manifest, reason, escaping, original bounds and coverage adapter assertions
+independent BMP decoding	PASS	ImageMagick recovered red/green/blue/(11,22,33) in original 2x2 positions, including padded rows
+synthetic report generation	PASS	current compiled renderer output byte-identical to fixtures/photo-review-synthetic.html
+input/output alias	PASS	CLI refused INPUT_OUTPUT_COLLISION; manifest bytes retained
+wrong original digest	PASS	CLI refused SOURCE_DIGEST; no report created
+out-of-frame region	PASS	CLI refused REVIEW_RECTANGLE; no report created
+real photograph report	PASS	three private source-bound regions rendered from authenticated originals; this is generation, not new optical acceptance
+browser interaction historical checkpoint	PASS	0a22dedebc26750a2e700840bff05d1665cd0341 run 43725678944; source-qualified synthetic fixture; later heads require their own workflow result
+physical camera capture	NOT_RUN	no physical-device camera behavior asserted
+automatic field-wide confidence detection	NOT_IMPLEMENTED	interface consumes explicit observations and existing coverage witnesses
+new-photo alignment and electrical verification	NOT_IMPLEMENTED	received images remain pending
+1718 24V optical preservation	FAIL	retained existing regression; processing-repair state, not a retake demand

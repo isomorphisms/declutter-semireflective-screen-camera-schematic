@@ -1,0 +1,57 @@
+PASS: preserved observed glass pixels and marked occluded pixels: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/aperture-image-companion
+PASS: preserved observed glass pixels and marked occluded pixels: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/aperture-window-companion
+PASS: preserved observed glass pixels and marked occluded pixels: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/aperture-window-primary
+FAIL: input and output paths must be distinct
+PASS: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/cleanup-dot-alias-input 3×2
+PASS: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/cleanup-symlink-companion 3×2
+PASS: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/cleanup-hardlink-companion 3×2
+PASS: registered source-selected pair: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/registration-image-companion
+PASS: registered source-selected pair: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/registration-image-provenance
+FAIL: output must differ from both input files
+PASS: registered source-selected pair: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/registration-plan-companion
+PASS: registered source-selected pair: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/registration-plan-provenance
+PASS: registered source-selected pair: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/registration-plan-primary
+PASS: registered source-selected pair: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/registration-second-image-companion
+PASS: registered source-selected pair: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/registration-second-image-provenance
+FAIL: output must differ from both input files
+PASS: registered source-selected pair: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/registration-map-hardlink-provenance
+PASS: wrote source-mapped section layout to /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/assemble-image-primary
+PASS: wrote source-mapped section layout to /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/assemble-layout-primary
+PASS: wrote source-mapped section layout to /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/assemble-symlink-source
+PASS: wrote source-mapped section layout to /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/assemble-hardlink-source
+PASS: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/special-dangling 3×2
+FAIL: image saved but provenance write failed: Is a directory
+PASS: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/positive-cleanup 3×2
+PASS: preserved observed glass pixels and marked occluded pixels: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/positive-aperture
+PASS: registered source-selected pair: /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/positive-registration
+PASS: wrote source-mapped section layout to /workspace/scratch/5cf074ba5c15/private/collision-old-guard.AO5B2q/positive-assemble
+FAIL	aperture-image-companion	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	aperture-window-companion	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	aperture-window-primary	exit=0	inputs-preserved=False	no-new-outputs=False
+PASS	cleanup-exact-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+FAIL	cleanup-dot-alias	exit=0	inputs-preserved=True	no-new-outputs=False
+FAIL	cleanup-symlink-companion	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	cleanup-hardlink-companion	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	registration-image-companion	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	registration-image-provenance	exit=0	inputs-preserved=False	no-new-outputs=False
+PASS	registration-map-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+FAIL	registration-plan-companion	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	registration-plan-provenance	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	registration-plan-primary	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	registration-second-image-companion	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	registration-second-image-provenance	exit=0	inputs-preserved=False	no-new-outputs=False
+PASS	registration-second-map-companion	exit=1	inputs-preserved=True	no-new-outputs=True
+FAIL	registration-map-hardlink-provenance	exit=0	inputs-preserved=False	no-new-outputs=False
+FAIL	assemble-image-primary	exit=0	inputs-preserved=True	no-new-outputs=True
+FAIL	assemble-layout-primary	exit=0	inputs-preserved=False	no-new-outputs=True
+FAIL	assemble-symlink-source	exit=0	inputs-preserved=True	no-new-outputs=True
+FAIL	assemble-hardlink-source	exit=0	inputs-preserved=True	no-new-outputs=True
+FAIL	cleanup-special-dangling	exit=0	inputs-preserved=True	no-new-outputs=False
+FAIL	cleanup-special-directory	exit=1	inputs-preserved=True	no-new-outputs=False
+FAIL	cleanup-special-fifo	exit=124	inputs-preserved=True	no-new-outputs=False
+PASS	positive-cleanup
+PASS	positive-aperture
+PASS	positive-registration
+PASS	positive-assemble
+PASS	positive-bytes-and-input-preservation
+FAIL	production collision regression remains open; fixture inputs only

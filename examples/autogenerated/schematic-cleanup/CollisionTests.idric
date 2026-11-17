@@ -1,0 +1,218 @@
+module CollisionTests
+
+import Data.List
+import Data.Text
+import System
+import System.File
+
+-- Run ONLY in a fresh disposable directory. No real photographs are written.
+-- This suite rejects the unsafe v3 baseline. This session now owns the existing
+-- Earth path-admission repair. Never use real original images as fixtures.
+covering
+fail_with : Text → IO value
+fail_with message = do
+  putStrLn ("FAIL\tfixture setup\t" ++ message)
+  exitFailure
+
+covering
+write_fixture : Text → Text → IO ()
+write_fixture path contents = do
+  Right () ← writeFile path contents
+    | Left error ⇒ fail_with (show error)
+  pure ()
+
+photograph : Text
+photograph = "P6\n3 2\n255\nABCDEFGHIJKLMNOPQR"
+
+mask : Text
+mask = "P6\n3 2\n255\n" ++ pack (replicate 18 (chr 12))
+
+window : Text
+window = "photo 12 3 2\nglass 0 0 2 0 2 1 0 1\n"
+
+covering
+snapshot : List Text → IO Text
+snapshot paths = do
+  (result, status) ← System.Escaped.run (["sha256sum", "--"] ++ paths)
+  if status ≟ 0 then pure result else fail_with "digest could not read all fixture inputs"
+
+covering
+entry_present : Text → IO Bool
+entry_present path = do
+  present ← System.Escaped.system ["test", "-e", path]
+  symbolic ← System.Escaped.system ["test", "-L", path]
+  pure (present ≟ 0 || symbolic ≟ 0)
+
+covering
+check_case : Text → List Text → List Text → List Text → IO Bool
+check_case label command inputs outputs = do
+  before ← snapshot inputs
+  existed ← traverse entry_present outputs
+  status ← System.Escaped.system (["timeout", "10"] ++ command)
+  after ← snapshot inputs
+  present ← traverse entry_present outputs
+  let preserved = before ≟ after
+  let no_partial = existed ≟ present
+  -- A crash, missing executable or blocked FIFO timed out is not rejection.
+  let passed = status ≟ 1 && preserved && no_partial
+  putStrLn ((if passed then "PASS\t" else "FAIL\t") ++ label ++
+            "\texit=" ++ show status ++ "\tinputs-preserved=" ++ show preserved ++
+            "\tno-new-outputs=" ++ show no_partial)
+  pure passed
+
+covering
+aperture_case : Text → Text → Text → IO Bool
+aperture_case executables directory role = do
+  let destination = directory ++ "/aperture-" ++ role
+  let source = if role ≟ "image-companion" then destination ++ ".sources.pnm"
+               else directory ++ "/aperture-" ++ role ++ "-input"
+  let plan = if role ≟ "window-companion" then destination ++ ".sources.pnm"
+             else if role ≟ "window-primary" then destination
+             else directory ++ "/aperture-" ++ role ++ "-window"
+  write_fixture source photograph
+  write_fixture plan window
+  check_case ("aperture-" ++ role) [executables ++ "/aperture", plan, source, destination]
+    [plan, source] [destination, destination ++ ".sources.pnm"]
+
+covering
+cleanup_case : Text → Text → Text → IO Bool
+cleanup_case executables directory role = do
+  let destination = directory ++ "/cleanup-" ++ role
+  let source = if role ≟ "exact-companion" then destination ++ ".provenance.tsv"
+               else directory ++ "/cleanup-" ++ role ++ "-input"
+  write_fixture source photograph
+  if role ≟ "symlink-companion" || role ≟ "hardlink-companion" then do
+    let arguments = if role ≟ "symlink-companion" then ["ln", "-s", "--"] else ["ln", "--"]
+    status ← System.Escaped.system (arguments ++ [source, destination ++ ".provenance.tsv"])
+    if status ≟ 0 then pure () else fail_with "cannot construct filesystem alias"
+    else pure ()
+  let input_argument = if role ≟ "dot-alias" then directory ++ "/./cleanup-dot-alias-input" else source
+  -- dot-alias intentionally aliases the primary output path below.
+  let output_argument = if role ≟ "dot-alias" then source else destination
+  check_case ("cleanup-" ++ role)
+    [executables ++ "/cleanup", "crop", input_argument, output_argument, "0", "0", "3", "2"]
+    [source] [output_argument, output_argument ++ ".provenance.tsv"]
+
+covering
+registration_case : Text → Text → Text → IO Bool
+registration_case executables directory role = do
+  let stem = "registration-" ++ role
+  let destination = directory ++ "/" ++ stem
+  let first_name = if role ≟ "image-companion" then stem ++ ".sources.pnm"
+                   else if role ≟ "image-provenance" then stem ++ ".provenance.tsv"
+                   else if role ≟ "map-companion" then stem
+                   else stem ++ "-first"
+  let first = directory ++ "/" ++ first_name
+  let second_name = if role ≟ "second-image-companion" then stem ++ ".sources.pnm"
+                    else if role ≟ "second-image-provenance" then stem ++ ".provenance.tsv"
+                    else if role ≟ "second-map-companion" then stem else stem ++ "-second"
+  let second = directory ++ "/" ++ second_name
+  let plan = if role ≟ "plan-companion" then destination ++ ".sources.pnm"
+             else if role ≟ "plan-provenance" then destination ++ ".provenance.tsv"
+             else if role ≟ "plan-primary" then destination else directory ++ "/" ++ stem ++ "-plan"
+  write_fixture first photograph
+  write_fixture second photograph
+  write_fixture (first ++ ".sources.pnm") mask
+  write_fixture (second ++ ".sources.pnm") mask
+  if role ≟ "map-hardlink-provenance" then do
+    status ← System.Escaped.system ["ln", "--", first ++ ".sources.pnm", destination ++ ".provenance.tsv"]
+    if status ≟ 0 then pure () else fail_with "cannot make map/provenance hard link"
+    else pure ()
+  write_fixture plan ("canvas 5 3\nearlier " ++ first_name ++ " 0 0 3 2\nlater " ++
+    second_name ++ " 0 0 3 2\nsimilarity 1000000 0 1000000 0\norigin -1 0\nseam 1\ngap 0\n")
+  check_case stem [executables ++ "/registration", plan, directory, destination]
+    [plan, first, second, first ++ ".sources.pnm", second ++ ".sources.pnm"]
+    [destination, destination ++ ".sources.pnm", destination ++ ".provenance.tsv"]
+
+covering
+assemble_case : Text → Text → Text → IO Bool
+assemble_case executables directory role = do
+  let stem = "assemble-" ++ role
+  let destination = directory ++ "/" ++ stem
+  let source_name = if role ≟ "image-primary" then stem else stem ++ "-source"
+  let source = directory ++ "/" ++ source_name
+  let layout = if role ≟ "layout-primary" then destination else directory ++ "/" ++ stem ++ "-layout"
+  write_fixture source photograph
+  write_fixture layout ("canvas 3 2\n" ++ source_name ++ " 0 0 3 2 0 0\n")
+  if role ≟ "symlink-source" || role ≟ "hardlink-source" then do
+    let options = if role ≟ "symlink-source" then ["ln", "-s", "--"] else ["ln", "--"]
+    status ← System.Escaped.system (options ++ [source, destination])
+    if status ≟ 0 then pure () else fail_with "cannot make Assemble alias"
+    else pure ()
+  check_case stem [executables ++ "/assemble", layout, directory, destination]
+    [layout, source] [destination]
+
+covering
+special_companion : Text → Text → Text → IO Bool
+special_companion executables directory role = do
+  let destination = directory ++ "/special-" ++ role
+  let source = destination ++ "-source"
+  let companion = destination ++ ".provenance.tsv"
+  let hidden_target = destination ++ "-dangling-target"
+  write_fixture source photograph
+  status ← System.Escaped.system (case role of
+    "dangling" ⇒ ["ln", "-s", "--", hidden_target, companion]
+    "directory" ⇒ ["mkdir", "--", companion]
+    _ ⇒ ["mkfifo", "--", companion])
+  if status /= 0 then fail_with "special companion fixture failed" else do
+    passed ← check_case ("cleanup-special-" ++ role)
+      [executables ++ "/cleanup", "crop", source, destination, "0", "0", "3", "2"]
+      [source] [destination, companion]
+    target_created ← entry_present hidden_target
+    pure (passed && not target_created)
+
+covering
+positive_cases : Text → Text → IO Bool
+positive_cases executables directory = do
+  let source = directory ++ "/positive-input"
+  let window_path = directory ++ "/positive-window"
+  let layout = directory ++ "/positive-layout"
+  let plan = directory ++ "/positive-plan"
+  let second = directory ++ "/positive-second"
+  write_fixture source photograph
+  write_fixture second photograph
+  write_fixture (source ++ ".sources.pnm") mask
+  write_fixture (second ++ ".sources.pnm") mask
+  write_fixture window_path window
+  write_fixture layout "canvas 3 2\npositive-input 0 0 3 2 0 0\n"
+  write_fixture plan "canvas 5 3\nearlier positive-input 0 0 3 2\nlater positive-second 0 0 3 2\nsimilarity 1000000 0 1000000 0\norigin -1 0\nseam 1\ngap 0\n"
+  let inputs = [source, second, source ++ ".sources.pnm", second ++ ".sources.pnm", window_path, layout, plan]
+  before ← snapshot inputs
+  results ← traverse (\(label, arguments) ⇒ do
+    status ← System.Escaped.system ((executables ++ "/" ++ label) :: arguments)
+    putStrLn ((if status ≟ 0 then "PASS\t" else "FAIL\t") ++ "positive-" ++ label)
+    pure (status ≟ 0))
+    [("cleanup", ["crop", source, directory ++ "/positive-cleanup", "0", "0", "3", "2"]),
+     ("aperture", [window_path, source, directory ++ "/positive-aperture"]),
+     ("registration", [plan, directory, directory ++ "/positive-registration"]),
+     ("assemble", [layout, directory, directory ++ "/positive-assemble"])]
+  after ← snapshot inputs
+  comparisons ← traverse (\name ⇒ System.Escaped.system ["cmp", "--", source, directory ++ "/positive-" ++ name])
+                         ["cleanup", "aperture", "assemble"]
+  let passed = all id results && before ≟ after && all (≟ 0) comparisons
+  putStrLn ((if passed then "PASS\t" else "FAIL\t") ++ "positive-bytes-and-input-preservation")
+  pure passed
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, executables, directory] ⇒ do
+      aperture_results ← traverse (aperture_case executables directory)
+        ["image-companion", "window-companion", "window-primary"]
+      cleanup_results ← traverse (cleanup_case executables directory)
+        ["exact-companion", "dot-alias", "symlink-companion", "hardlink-companion"]
+      registration_results ← traverse (registration_case executables directory)
+        ["image-companion", "image-provenance", "map-companion", "plan-companion", "plan-provenance", "plan-primary",
+         "second-image-companion", "second-image-provenance", "second-map-companion", "map-hardlink-provenance"]
+      assemble_results ← traverse (assemble_case executables directory)
+        ["image-primary", "layout-primary", "symlink-source", "hardlink-source"]
+      special_results ← traverse (special_companion executables directory) ["dangling", "directory", "fifo"]
+      positive ← positive_cases executables directory
+      if positive && all id (aperture_results ++ cleanup_results ++ registration_results ++ assemble_results ++ special_results)
+         then putStrLn "PASS\tall unsafe invocations rejected before writing; input bytes preserved"
+         else do
+           putStrLn "FAIL\tproduction collision regression remains open; fixture inputs only"
+           exitFailure
+    _ ⇒ fail_with "usage: collision-tests PRODUCTION_EXECUTABLE_DIRECTORY FRESH_DISPOSABLE_DIRECTORY"

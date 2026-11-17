@@ -1,0 +1,5 @@
+# New circuit-terminal observations, withheld from the seven-point fitted model.
+# Native coordinates inspected in the 200-pixel M2S source crops on 2026-11-11.
+first	second	feature	first_x	first_y	second_x	second_y	uncertainty_pixels
+1720	1723	M2S-L2-held-out	620	899	586	488	4
+1720	1723	M2S-T2-held-out	620	980	585	564	4

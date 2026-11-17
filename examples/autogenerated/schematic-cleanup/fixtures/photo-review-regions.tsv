@@ -1,0 +1,4 @@
+version	photo-requests-v1
+region	synthetic-glare	photo-review-original.ppm	f372049e5e464a2ae81091479f8262d18197998dccece77720f7ede7b85ccc28	0	0	2	2	glare	Synthetic fixture only: no private photographs are included.
+region	synthetic-connection	photo-review-original.ppm	f372049e5e464a2ae81091479f8262d18197998dccece77720f7ede7b85ccc28	0	0	2	2	disagreement	Synthetic unresolved endpoint used to exercise the request interface.
+region	synthetic-processing-loss	photo-review-original.ppm	f372049e5e464a2ae81091479f8262d18197998dccece77720f7ede7b85ccc28	0	0	2	2	processing-loss	Synthetic processing failure; this state must not ask for a retake.

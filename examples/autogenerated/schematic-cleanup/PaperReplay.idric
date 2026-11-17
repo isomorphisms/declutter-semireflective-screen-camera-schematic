@@ -1,0 +1,73 @@
+module PaperReplay
+
+import Data.Text
+import PaperMesh
+import SchematicRaster
+import System
+import System.File
+
+-- This check replays original samples from recorded coordinates, not from the
+-- renderer's interpolation. It certifies sample provenance, NOT optical joins,
+-- completeness, correct landmark identity or the photographic mesh geometry.
+same_pixel : Pixel → Pixel → Bool
+same_pixel first second = first.red ≟ second.red && first.green ≟ second.green &&
+                          first.blue ≟ second.blue
+
+coordinate : Pixel → Int
+coordinate pixel = cast pixel.green + 256 × cast pixel.blue
+
+covering
+export
+replay_images : MeshPlan → List (MeshSource, Image) → Image → Image → Image → IO (Either Text ())
+replay_images plan originals candidate source_x source_y =
+  if image_width candidate /= plan.columns || image_height candidate /= plan.rows ||
+     image_width source_x /= plan.columns || image_height source_x /= plan.rows ||
+     image_width source_y /= plan.columns || image_height source_y /= plan.rows
+    then pure (Left "REPLAY_SHAPE: output and coordinate maps disagree") else
+  for_indices_result (cast plan.rows) 0 $ \row ⇒
+    for_indices_result (cast plan.columns) 0 $ \column ⇒ do
+      Just actual ← pixel_at candidate column row
+        | Nothing ⇒ pure (Left "REPLAY_INTERNAL: candidate sample missing")
+      Just xmap ← pixel_at source_x column row
+        | Nothing ⇒ pure (Left "REPLAY_INTERNAL: x sample missing")
+      Just ymap ← pixel_at source_y column row
+        | Nothing ⇒ pure (Left "REPLAY_INTERNAL: y sample missing")
+      if xmap.red /= ymap.red then pure (Left "REPLAY_IDENTITY: maps name different sources") else
+      if xmap.red ≟ 0 then
+        if same_pixel xmap (RGB 0 0 0) && same_pixel ymap (RGB 0 0 0) &&
+           same_pixel actual (RGB 232 232 232)
+          then pure (Right ()) else pure (Left "REPLAY_UNKNOWN: malformed unobserved sample")
+      else if inside_gap plan (MeshAt column row)
+        then pure (Left "REPLAY_GAP: an explicitly unknown region was filled") else
+        case find_loaded (cast xmap.red) originals of
+          Nothing ⇒ pure (Left "REPLAY_IDENTITY: unknown photograph")
+          Just original ⇒ do
+            sample ← pixel_at original (coordinate xmap) (coordinate ymap)
+            case sample of
+              Nothing ⇒ pure (Left "REPLAY_COORDINATE: outside authenticated original")
+              Just expected ⇒ if same_pixel actual expected then pure (Right ())
+                else pure (Left ("REPLAY_PIXEL: RGB differs from original at " ++
+                     show column ++ "," ++ show row))
+
+covering
+main : IO ()
+main = do
+  arguments ← getArgs
+  case arguments of
+    [_, manifest_path, directory, candidate_path] ⇒ do
+      Right manifest ← readFile manifest_path
+        | Left error ⇒ do putStrLn (show error); exitFailure
+      Right plan ← pure (parse_mesh manifest)
+        | Left message ⇒ do putStrLn message; exitFailure
+      Right originals ← load_sources directory plan.sources
+        | Left message ⇒ do putStrLn message; exitFailure
+      Right candidate ← read_ppm candidate_path
+        | Left message ⇒ do putStrLn message; exitFailure
+      Right source_x ← read_ppm (candidate_path ++ ".x.pnm")
+        | Left message ⇒ do putStrLn message; exitFailure
+      Right source_y ← read_ppm (candidate_path ++ ".y.pnm")
+        | Left message ⇒ do putStrLn message; exitFailure
+      Right () ← replay_images plan originals candidate source_x source_y
+        | Left message ⇒ do putStrLn message; exitFailure
+      putStrLn "PASS: every covered RGB sample replays from its authenticated original"
+    _ ⇒ do putStrLn "usage: paper-replay PLAN.tsv ORIGINAL_P6_DIRECTORY OUTPUT.pnm"; exitFailure

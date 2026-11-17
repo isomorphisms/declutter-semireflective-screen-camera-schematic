@@ -1,0 +1,136 @@
+module VerifyEnhancement
+
+import Data.List
+import Data.Text
+import SchematicRaster
+import VerifyCoverage
+import System
+import System.File
+
+-- Baseline arithmetic only. Enumerate each clipped neighbourhood directly,
+-- with Integer sums; never call enhance/local_mean/normalize_sample or build
+-- an integral image. This does not adjudicate useful information preservation.
+record ChannelSums where
+  constructor SummedSamples
+  red : Integer
+  green : Integer
+  blue : Integer
+
+sum_samples : Number → Int → Int → Int → Int → Image → ChannelSums → IO (Either Text ChannelSums)
+sum_samples Z _ _ _ _ _ accumulated = pure (Right accumulated)
+sum_samples (S remaining) index left top columns image accumulated = do
+  Just sample ← pixel_at image (left + index `mod` columns) (top + index `div` columns)
+    | Nothing ⇒ pure (Left "ARITHMETIC_FRAME: neighbourhood leaves original")
+  sum_samples remaining (index + 1) left top columns image
+    (SummedSamples (accumulated.red + cast sample.red) (accumulated.green + cast sample.green)
+                   (accumulated.blue + cast sample.blue))
+
+render_channel : Integer → Integer → Integer → Integer → Integer → Channel
+render_channel accumulated count sample gain noise =
+  let difference = max 0 (accumulated `div` count - sample - noise) in
+  let darkness = gain × difference in
+  cast (if darkness >= 255 then 0 else 255 - darkness)
+
+export
+direct_expected : Image → Int → Int → Int → Int → Int → IO (Either Text Pixel)
+direct_expected original radius gain noise x y =
+  if radius < 1 || radius > 256 || gain < 1 || gain > 16 || noise < 0 || noise > 32 ||
+     x < 0 || y < 0 || x >= image_width original || y >= image_height original
+     then pure (Left "ARITHMETIC_ADMISSION: unsupported parameter or coordinate")
+     else do
+       let left = max 0 (x - radius)
+       let top = max 0 (y - radius)
+       let right = min (image_width original) (x + radius + 1)
+       let bottom = min (image_height original) (y + radius + 1)
+       let count = (right - left) × (bottom - top)
+       Right accumulated ← sum_samples (cast count) 0 left top (right - left) original (SummedSamples 0 0 0)
+         | Left message ⇒ pure (Left message)
+       Just sample ← pixel_at original x y
+         | Nothing ⇒ pure (Left "ARITHMETIC_FRAME: centre absent")
+       pure (Right (RGB (render_channel accumulated.red (cast count) (cast sample.red) (cast gain) (cast noise))
+                       (render_channel accumulated.green (cast count) (cast sample.green) (cast gain) (cast noise))
+                       (render_channel accumulated.blue (cast count) (cast sample.blue) (cast gain) (cast noise))))
+
+same_pixel : Pixel → Pixel → Bool
+same_pixel first second = first.red ≟ second.red && first.green ≟ second.green && first.blue ≟ second.blue
+
+covering
+arithmetic_fixtures : IO ()
+arithmetic_fixtures = do
+  if render_channel 0 1 0 8 0 ≟ 255 &&
+     render_channel 255 1 0 16 0 ≟ 0 &&
+     render_channel 678 3 0 1 0 ≟ 29 &&
+     render_channel 100 1 255 8 0 ≟ 255
+     then putStrLn "PASS\tindependent mean-floor, clipping and extreme-byte fixtures"
+     else do
+       putStrLn "FAIL\tindependent arithmetic fixtures"
+       exitFailure
+  tiny ← new_image 3 2 >>= require_right
+  _ ← put_pixel tiny 0 0 black
+  expected ← direct_expected tiny 1 1 0 0 0 >>= require_right
+  if same_pixel expected (RGB 64 64 64)
+     then putStrLn "PASS\tdirect non-square clipped corner: floor(3*255/4)=191"
+     else exitFailure
+  bad ← direct_expected tiny 257 16 0 0 0
+  case bad of
+    Left _ ⇒ putStrLn "PASS\tunsupported radius rejected before neighbourhood arithmetic"
+    Right _ ⇒ exitFailure
+
+verify_points : Image → Image → Int → Int → Int → List (Int, Int) → IO (Either Text ())
+verify_points original candidate radius gain noise [] = pure (Right ())
+verify_points original candidate radius gain noise ((x, y) :: rest) = do
+  Right expected ← direct_expected original radius gain noise x y
+    | Left message ⇒ pure (Left message)
+  Just actual ← pixel_at candidate x y
+    | Nothing ⇒ pure (Left "ARITHMETIC_FRAME: candidate sample absent")
+  if same_pixel expected actual
+     then verify_points original candidate radius gain noise rest
+     else pure (Left ("ARITHMETIC_MISMATCH: native " ++ show x ++ "," ++ show y))
+
+covering
+main : IO ()
+main = do
+  arithmetic_fixtures
+  arguments ← getArgs
+  case arguments of
+    [_, mode, manifest_path, original_path, candidate_path] ⇒ do
+      Right text ← readFile manifest_path
+        | Left error ⇒ do
+            putStrLn ("FAIL\t" ++ show error)
+            exitFailure
+      manifest ← require_right (parse_manifest text)
+      _ ← verify_input_digest manifest.decoded_sha256 original_path >>= require_right
+      original ← read_ppm original_path >>= require_right
+      candidate ← read_ppm candidate_path >>= require_right
+      if image_width candidate /= manifest.source_width || image_height candidate /= manifest.source_height
+         then do
+           putStrLn "FAIL\tARITHMETIC_FRAME: requires native observation, not assembled sheet"
+           exitFailure
+         else do
+           let points = concatMap (\probe ⇒ [(probe.mark_x, probe.mark_y),
+                                             (probe.background_x, probe.background_y)]) manifest.probes
+           Just (x, y) ← pure (head' points)
+             | Nothing ⇒ do
+                 putStrLn "FAIL\tARITHMETIC_NONVACUITY: no independently witnessed points"
+                 exitFailure
+           if mode ≟ "reject-corruption" then do
+             Just sample ← pixel_at candidate x y
+               | Nothing ⇒ exitFailure
+             _ ← put_pixel candidate x y (RGB (if sample.red ≟ 0 then 1 else 0) sample.green sample.blue)
+             pure ()
+             else pure ()
+           let gain = if mode ≟ "reject-wrong-parameters" then 7 else 8
+           result ← verify_points original candidate 32 gain 0 points
+           case (mode, result) of
+             ("audit", Right ()) ⇒ putStrLn ("PASS\tbaseline-32-8-0-direct-neighbourhoods\t" ++ show (length points) ++ " RGB points; preservation checked separately")
+             ("reject-corruption", Left message) ⇒ putStrLn ("PASS\tcorrupt-output-rejected\t" ++ message)
+             ("reject-wrong-parameters", Left message) ⇒ putStrLn ("PASS\twrong-parameter-model-rejected\t" ++ message)
+             (_, Left message) ⇒ do
+               putStrLn ("FAIL\t" ++ message)
+               exitFailure
+             _ ⇒ do
+               putStrLn "FAIL\tunsupported mode or negative control falsely accepted"
+               exitFailure
+    _ ⇒ do
+      putStrLn "usage: verify-enhancement audit|reject-corruption|reject-wrong-parameters MANIFEST ORIGINAL NATIVE_CANDIDATE"
+      exitFailure

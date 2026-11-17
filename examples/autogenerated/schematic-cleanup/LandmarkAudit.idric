@@ -1,0 +1,183 @@
+module LandmarkAudit
+
+import Data.List
+import Data.Text
+import System
+import System.File
+
+-- Integer least-squares fitting is an independent geometric diagnostic.
+-- It neither renders pixels nor establishes electrical continuity.
+record CircuitMatch where
+  constructor SameMark
+  earlier_id : Text
+  later_id : Text
+  feature : Text
+  earlier_x : Integer
+  earlier_y : Integer
+  later_x : Integer
+  later_y : Integer
+
+record Fit where
+  constructor SimilarityFit
+  a : Integer
+  b : Integer
+  column_offset : Integer
+  row_offset : Integer
+
+unit : Integer
+unit = 1000000
+
+rounded : Integer → Integer → Integer
+rounded numerator denominator =
+  if denominator <= 0 then 0 else
+  if numerator < 0 then - ((-numerator + denominator `div` 2) `div` denominator)
+                   else (numerator + denominator `div` 2) `div` denominator
+
+fit_matches : List CircuitMatch → Either Text Fit
+fit_matches matches =
+  let count = cast {to = Integer} (length matches) in
+  let source_x = sum (map earlier_x matches) in
+  let source_y = sum (map earlier_y matches) in
+  let target_x = sum (map later_x matches) in
+  let target_y = sum (map later_y matches) in
+  let source_norm = sum (map (\mark ⇒ mark.earlier_x × mark.earlier_x +
+                                       mark.earlier_y × mark.earlier_y) matches) in
+  let dot = sum (map (\mark ⇒ mark.earlier_x × mark.later_x +
+                               mark.earlier_y × mark.later_y) matches) in
+  let cross = sum (map (\mark ⇒ mark.earlier_x × mark.later_y -
+                                 mark.earlier_y × mark.later_x) matches) in
+  let denominator = count × source_norm - source_x × source_x - source_y × source_y in
+  if count < 2 || denominator <= 0
+     then Left "underdetermined circuit landmarks"
+     else
+       let a = rounded ((count × dot - source_x × target_x - source_y × target_y) × unit) denominator in
+       let b = rounded ((count × cross - source_x × target_y + source_y × target_x) × unit) denominator in
+       Right (SimilarityFit a b
+         (rounded (target_x × unit - a × source_x + b × source_y) count)
+         (rounded (target_y × unit - b × source_x - a × source_y) count))
+
+squared_error : Fit → CircuitMatch → Integer
+squared_error transformation mark =
+  let column = rounded (transformation.a × mark.earlier_x -
+                         transformation.b × mark.earlier_y +
+                         transformation.column_offset) unit in
+  let row = rounded (transformation.b × mark.earlier_x +
+                      transformation.a × mark.earlier_y +
+                      transformation.row_offset) unit in
+  (column - mark.later_x) × (column - mark.later_x) +
+  (row - mark.later_y) × (row - mark.later_y)
+
+largest : List Integer → Integer
+largest = foldl max 0
+
+held_out_error : List CircuitMatch → CircuitMatch → Either Text Integer
+held_out_error matches withheld = do
+  transformation ← fit_matches (filter (\mark ⇒ mark.feature /= withheld.feature) matches)
+  Right (squared_error transformation withheld)
+
+coordinate : Text → Either Text Integer
+coordinate text = case parseInteger {a = Integer} text of
+  Just value ⇒ if value >= 0 && value <= 32768
+                  then Right value else Left "landmark coordinate exceeds native raster limits"
+  Nothing ⇒ Left "invalid landmark coordinate"
+
+parse_match : Text → Either Text CircuitMatch
+parse_match line = case words line of
+  [earlier, later, feature, x0, y0, x1, y1, uncertainty] ⇒ do
+    source_x ← coordinate x0
+    source_y ← coordinate y0
+    target_x ← coordinate x1
+    target_y ← coordinate y1
+    _ ← coordinate uncertainty
+    Right (SameMark earlier later feature source_x source_y target_x target_y)
+  _ ⇒ Left "landmark row must have eight fields"
+
+active : Text → Bool
+active text = trim text /= "" && not (isPrefixOf "#" (trim text)) &&
+              not (isPrefixOf "first" (trim text))
+
+covering
+report_pair : List CircuitMatch → (Text, Text) → IO ()
+report_pair matches (earlier, later) = do
+  let selected = filter (\mark ⇒ mark.earlier_id ≟ earlier && mark.later_id ≟ later) matches
+  let prefix = earlier ++ "\t" ++ later ++ "\t" ++ show (length selected) ++ "\t"
+  if length selected < 3
+     then putStrLn (prefix ++ "REJECT\tinsufficient independently withheld landmarks")
+     else case fit_matches selected of
+       Left message ⇒ putStrLn (prefix ++ "REJECT\t" ++ message)
+       Right transformation ⇒ case the (Either Text (List Integer))
+                                    (traverse (held_out_error selected) selected) of
+         Left message ⇒ putStrLn (prefix ++ "REJECT\t" ++ message)
+         Right withheld ⇒ putStrLn (prefix ++
+           show transformation.a ++ "\t" ++ show transformation.b ++ "\t" ++
+           show transformation.column_offset ++ "\t" ++ show transformation.row_offset ++ "\t" ++
+           show (largest (map (squared_error transformation) selected)) ++ "\t" ++
+           show (largest withheld))
+
+covering
+report_holdout : CircuitMatch → IO ()
+report_holdout mark =
+  if mark.earlier_id /= "1720" || mark.later_id /= "1723"
+     then do
+       putStrLn "FAIL: unsupported held-out pair"
+       exitFailure
+     else do
+       -- The published plan is kept fixed; these new terminals do not refit it.
+       let error = squared_error (SimilarityFit 916800 46900 60278600 (-364557200)) mark
+       putStrLn ("# held-out\t" ++ mark.feature ++ "\tsquared_pixels\t" ++ show error)
+       if error <= 25 then pure () else do
+         putStrLn "FAIL: independently observed terminal disagrees with fixed plan"
+         exitFailure
+
+covering
+main : IO ()
+main = do
+  let known = [SameMark "a" "b" "origin" 0 0 3 5,
+               SameMark "a" "b" "right" 2 0 3 7,
+               SameMark "a" "b" "lower" 0 3 0 5]
+  case fit_matches known of
+    Right fitted ⇒
+      if fitted.a ≟ 0 && fitted.b ≟ unit && fitted.column_offset ≟ 3000000 &&
+         fitted.row_offset ≟ 5000000 && largest (map (squared_error fitted) known) ≟ 0
+         then putStrLn "# PASS: independent quarter-turn landmark fixture"
+         else do
+           putStrLn "FAIL: known-good fit"
+           exitFailure
+    Left message ⇒ do
+      putStrLn ("FAIL: " ++ message)
+      exitFailure
+  case fit_matches [SameMark "a" "b" "same1" 1 1 2 2, SameMark "a" "b" "same2" 1 1 9 9] of
+    Left _ ⇒ putStrLn "# PASS: coincident source landmarks rejected"
+    Right _ ⇒ do
+      putStrLn "FAIL: degenerate fit admitted"
+      exitFailure
+  arguments ← getArgs
+  case arguments of
+    [_, path, validation_path] ⇒ do
+      Right text ← readFile path
+        | Left error ⇒ do
+            putStrLn ("FAIL: " ++ show error)
+            exitFailure
+      Right matches ← pure (traverse parse_match (filter active (lines text)))
+        | Left message ⇒ do
+            putStrLn ("FAIL: " ++ message)
+            exitFailure
+      putStrLn "earlier\tlater\tlandmarks\ta_millionths\tb_millionths\tx_millionths\ty_millionths\tmax_fit_squared_pixels\tmax_withheld_squared_pixels"
+      traverse_ (report_pair matches)
+        [("1712", "1713"), ("1713", "1718"), ("1715", "1716"),
+         ("1716", "1717"), ("1720", "1723"), ("1721", "1722")]
+      Right validation_text ← readFile validation_path
+        | Left error ⇒ do
+            putStrLn ("FAIL: " ++ show error)
+            exitFailure
+      Right validation ← pure (traverse parse_match (filter active (lines validation_text)))
+        | Left message ⇒ do
+            putStrLn ("FAIL: " ++ message)
+            exitFailure
+      if null validation then do
+        putStrLn "FAIL: empty held-out observations"
+        exitFailure
+        else traverse_ report_holdout validation
+    _ ⇒ do
+      putStrLn "usage: landmark-audit LANDMARKS.tsv HELD_OUT_LANDMARKS.tsv"
+      exitFailure

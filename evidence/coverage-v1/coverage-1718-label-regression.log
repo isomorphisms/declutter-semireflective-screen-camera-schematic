@@ -1,0 +1,2 @@
+PASS	supply-N-fragment	original-1718-horizontal-red-fragment-right-of-N
+FAIL	LOCAL_INFORMATION: supply-24V-DC at 590,1257 contrast=0 required=7

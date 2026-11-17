@@ -1,0 +1,27 @@
+# Visually estimated original-image coordinates; these are not accepted fit results.
+# Collinear or obscured landmarks are insufficient to establish a general affine transform.
+first	second	feature	first_x	first_y	second_x	second_y	uncertainty_pixels
+1712	1713	rotor-reverse-output-candidate	595	1290	610	166	25
+1713	1718	spare-output-9	574	1190	481	449	12
+1713	1718	circled-wire-12	602	1293	505	541	12
+1713	1718	circled-wire-3	452	1307	383	538	12
+1715	1716	circled-wire-25	538	1280	512	242	15
+1715	1716	rotor-overload-left-bus	103	1307	31	257	15
+1715	1716	rotor-overload-contact	370	1306	320	269	15
+1716	1717	spare-input-13	558	1030	634	413	8
+1716	1717	analog-input-positive	554	1121	630	510	8
+1716	1717	analog-input-negative	553	1207	627	605	8
+1716	1717	current-transformer-center	373	1160	441	550	8
+1716	1717	circled-wire-28	495	1095	571	483	8
+1716	1717	circled-wire-29	495	1185	570	577	8
+1720	1723	M2S-L1	579	899	548	486	8
+1720	1723	M2S-L3	662	900	623	490	8
+1720	1723	M2S-T1	578	978	547	562	8
+1720	1723	M2S-T3	662	980	620	566	8
+1720	1723	rotor-overload-first-upper	127	897	133	464	8
+1720	1723	rotor-overload-third-upper	211	899	214	464	8
+1720	1723	rotor-overload-first-lower	129	977	133	541	8
+1721	1722	inner-transformer-supply-bend	704	1124	722	547	12
+1721	1722	outer-transformer-supply-bend	727	1103	752	517	12
+1721	1722	upper-long-return-left-bend	344	1123	255	572	12
+1721	1722	outer-low-return-left-bend-candidate	205	1230	82	713	15

@@ -1,0 +1,16 @@
+PASS	supply-N-fragment	original-1718-horizontal-red-fragment-right-of-N
+PASS	supply-L-mark	original-1718-L-terminal-letter-no-identity-beyond-visible-L
+UNRESOLVED	supply-glare-connection	hand-overlaps-wire-no-endpoint-or-continuity-assertion
+CONTAMINATION	hand-contour	original-hand-reflection-not-schematic
+UNRESOLVED	supply-hidden-terminal	no-legible-identity-asserted
+PASS	positive baseline before mutations
+PASS	mutation	erase-observed-feature	LOCAL_INFORMATION: supply-N-fragment at 520,1082 contrast=0 required=19
+PASS	mutation	mask-boundary-crosses-feature	COVERAGE_LOSS: supply-N-fragment at output 510,3588
+PASS	mutation	same-shape-wrong-photo-map	SOURCE_MAP_IDENTITY: foreign photograph or unequal channels in target frame
+PASS	mutation	all-grey-all-unknown	COVERAGE_LOSS: supply-N-fragment at output 510,3588
+PASS	mutation	all-grey-with-legitimate-map	LOCAL_INFORMATION: supply-N-fragment at 520,1082 contrast=0 required=19
+PASS	mutation	all-witnesses-unresolved-rejected-at-admission
+PASS	mutation	zero-admitted-witnesses	NONVACUITY: require observed conductor, marking and probes for every required witness
+PASS	supply-N-fragment	original-1718-horizontal-red-fragment-right-of-N
+PASS	mutation	erase-part-of-label	LOCAL_INFORMATION: supply-L-mark at 504,1051 contrast=0 required=17
+PASS	coverage mutation suite; photographic scope remains bounded

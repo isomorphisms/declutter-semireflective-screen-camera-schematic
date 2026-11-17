@@ -1,0 +1,16 @@
+Error: Not the end of a block entry, check indentation.
+
+RunPathsTests:95:3--95:10
+ 91 |   invoke ["ln", "--", source, raced_hard]
+ 92 |   write_new_text raced_hard "destroyed" >>= reject "hard-link-inserted-after-admission"
+ 93 |   expect_text source "original bytes\n"
+ 94 |   missing ← System.Escaped.system ["test", "-e", directory ++ "/absent"]
+ 95 |   partial ← System.Escaped.system ["test", "-e", directory ++ "/future"]
+        ^^^^^^^
+
+Error: Undefined name unsafePerformIO. 
+
+(Interactive):1:1--1:1
+ 1 | module RunPathsTests
+     
+

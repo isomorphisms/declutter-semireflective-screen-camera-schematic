@@ -1,0 +1,16 @@
+Error: Expected 'else'.
+
+Registration:310:3--310:7
+ 306 | render_plan : PairPlan → Image → Image → Text → IO (Either Text ())
+ 307 | render_plan plan first second destination = do
+ 308 |   if not (plan_geometry_admitted plan)
+ 309 |      then pure (Left "unsupported plan geometry")
+ 310 |   else if not (region_fits plan.earlier first && region_fits plan.later second)
+         ^^^^
+
+Error: Undefined name unsafePerformIO. 
+
+(Interactive):1:1--1:1
+ 1 | module Registration
+     
+

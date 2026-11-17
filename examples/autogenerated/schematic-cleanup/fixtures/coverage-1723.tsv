@@ -1,0 +1,10 @@
+version coverage-v1
+source 23 photograph 1152 1536 5b469d85134d56f56bd367d29aa17839d0222836306cb1b608ea225f4e8a1df5 bddac3d46accfd6c607fc576545861b6e4bde41ac8c15b74bad9abf2c7169c41
+target observation-1723 output 1152 1536 0 0 584598e7a5ba453901f9f9b4e5c49a8be6e8cebfc543191c3a1e84d2dfd75a55 8145063ef13e3ddcda3284ed2ea7ccf6b6595b90
+review agent-original-inspection
+witness boundary-blue-rail wire-segment observed 545 355 20 35 original-vertical-blue-rail-just-inside-glass-boundary 1720-arrangement-only
+probe boundary-blue-rail 551 360 559 360 0 35 42 52 56 64 67
+probe boundary-blue-rail 550 380 558 380 0 49 59 69 61 71 72
+witness M2S-middle-terminal terminal-mark observed 580 478 20 20 original-red-middle-terminal-ring-identity-not-transcribed 1720-held-out-L2-geometric-evidence
+probe M2S-middle-terminal 586 488 594 488 1 109 93 94 103 102 100
+witness boundary-continuation wire-endpoint ambiguous 545 345 20 10 bezel-occludes-continuation-no-extension-asserted none

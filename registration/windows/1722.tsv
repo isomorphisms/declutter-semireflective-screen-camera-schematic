@@ -1,0 +1,6 @@
+# Native photograph coordinates; grey means excluded, never reconstructed.
+photo 22 1152 1536
+glass 0 235 1125 275 1075 1385 0 1425
+triangle 555 235 625 355 470 350
+triangle 0 860 40 790 40 935
+exclude 20 1360 250 70
