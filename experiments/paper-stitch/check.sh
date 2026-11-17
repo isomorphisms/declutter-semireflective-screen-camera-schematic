@@ -26,4 +26,21 @@ mesh 1 0 0 0 0 0 0 0 0 32768 0 0 0 0 0 0 0 0 0
 MESH
 if "$work/paper-stitch" "$work/good.tsv" "$work/fold" >/dev/null 2>&1; then echo 'FAIL: folded-over mesh admitted'; exit 1; fi
 if test -e "$work/fold.ppm"; then echo 'FAIL: invalid mesh wrote output'; exit 1; fi
-printf '%s\n' 'PASS: C11 compile, synthetic P6 input/output, no overwrite, missing join, foldover rejection'
+# Three-photo layout: two distinct qualified overlaps, no triple pixel ownership.
+cp "$work/first.ppm" "$work/third.ppm"
+cat > "$work/three.tsv" <<PLAN
+canvas 8 4
+source 1 $work/first.ppm 0 0 4 4 1000000 0 0 0 1000000 0 0 0
+source 2 $work/second.ppm 2 0 6 4 1000000 0 -2000000 0 1000000 0 0 0
+source 3 $work/third.ppm 4 0 8 4 1000000 0 -4000000 0 1000000 0 0 0
+join 1 2 x 3 1
+join 2 3 x 5 1
+PLAN
+"$work/paper-stitch" "$work/three.tsv" "$work/three" >/dev/null
+test -s "$work/three.source-id.pgm"
+# An extra overlapping 4x4 exposure would create an ambiguous triple owner.
+sed "s@source 3 $work/third.ppm 4 0 8 4 1000000 0 -4000000@source 3 $work/third.ppm 2 0 6 4 1000000 0 -2000000@" \
+  "$work/three.tsv" > "$work/triple.tsv"
+if "$work/paper-stitch" "$work/triple.tsv" "$work/triple" >/dev/null 2>&1; then echo 'FAIL: triple-overlap accepted'; exit 1; fi
+if test -e "$work/triple.ppm"; then echo 'FAIL: triple-overlap wrote output'; exit 1; fi
+printf '%s\n' 'PASS: C11 compile, 2-/3-photo synthetic P6 output, provenance, overwrite, missing/triple joins, foldover rejection'
