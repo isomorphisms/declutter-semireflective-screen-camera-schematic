@@ -1,0 +1,30 @@
+source_file	bank	channel_or_terminal	circled_wire_id	function	connection_note
+originals/1000001997.jpg	digital_input	0	20	SCREEN DOOR	Hopper-door and screen-door contacts are in series
+originals/1000001997.jpg	digital_input	1	21	ROTOR MOTOR TEMP	TR1 contact
+originals/1000001997.jpg	digital_input	2	22	OIL TEMP / LEVEL	Switching input
+originals/1000001997.jpg	digital_input	3	23	PRESSURE SWITCH	Switching input
+originals/1000001997.jpg	digital_input	4	24	TORQUE SWITCH	Field terminals 28 and 29 are distinct from circled wire IDs
+originals/1000001997.jpg	digital_input	5	25	ROTOR O.L. TRIP	M1 overload-relay contact
+originals/1000001997.jpg	digital_input	6	26	HYD. O.L. TRIP	CB4 contact
+originals/1000001997.jpg	digital_input	7	27	DISCHARGE CONV. RUNNING / SMOKE DETECTOR INTERLOCK	CB6 and CR7 contacts plus smoke-detector interlock shown
+originals/1000001997.jpg	digital_input	8	42	DISCHARGE / RAM PAUSE	Caption partly across fold; CR5 contact; INSERT #1 calls CR5 coil COMPACTOR FEED PAUSE
+originals/1000001997.jpg	digital_input	9	NOT_SHOWN	OPTIONAL FRONT L.S.	No input conductor drawn
+originals/1000001997.jpg	digital_input	10	NOT_SHOWN	OPTIONAL REAR L.S.	No input conductor drawn
+originals/1000001997.jpg	digital_input	11	NOT_SHOWN	OPTIONAL START SW.	No input conductor drawn
+originals/1000001997.jpg	digital_input	12	NOT_SHOWN	OPTIONAL STOP SW.	No input conductor drawn
+originals/1000001997.jpg	digital_input	13	NOT_SHOWN	SPARE	No input conductor drawn
+originals/1000001997.jpg	digital_output	0	NOT_SHOWN	OPTIONAL ET1	No outgoing connection drawn
+originals/1000001997.jpg	digital_output	1	4	ROTOR FORWARD	CR1 coil
+originals/1000001997.jpg	digital_output	2	5	ROTOR REVERSE	CR2 coil
+originals/1000001997.jpg	digital_output	3	6	RAM SLOW	M2F interlock; wire 7; M2S coil
+originals/1000001997.jpg	digital_output	4	8	RAM FAST	M2S interlock; wire 9; M2F coil
+originals/1000001997.jpg	digital_output	5	10	RAM FORWARD	CR3 coil
+originals/1000001997.jpg	digital_output	6	11	RAM REVERSE	CR4 coil
+originals/1000001997.jpg	digital_output	7	NOT_SHOWN	ROTOR BLOCK	No outgoing connection drawn
+originals/1000001997.jpg	digital_output	8	NOT_SHOWN	SPARE	No outgoing connection drawn
+originals/1000001997.jpg	digital_output	9	NOT_SHOWN	SPARE	No outgoing connection drawn
+originals/1000001997.jpg	input_common	COM0	19	DC negative common	24 V DC supply negative
+originals/1000001997.jpg	input_common	COM1	19	DC negative common	24 V DC supply negative
+originals/1000001997.jpg	output_common	L1; VAC0; VAC1; VAC2; VAC3; VAC4	3	Switched AC supply	120 V AC circuit after E-stop chain
+originals/1000001997.jpg	analog_input	IN0+	28	ANALOG INPUT	From device tagged CT; signal type and range unspecified
+originals/1000001997.jpg	analog_input	IN0-	29	ANALOG INPUT	From device tagged CT; signal type and range unspecified
